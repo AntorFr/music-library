@@ -1,0 +1,44 @@
+[project]
+name = "music-library"
+version = "0.5.0-beta"
+description = "Family media library manager with Home Assistant & Music Assistant integration"
+requires-python = ">=3.12,<4"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "sqlalchemy[asyncio]>=2.0",
+    "aiosqlite>=0.21",
+    "alembic>=1.14",
+    "jinja2>=3.1",
+    "python-multipart>=0.0.18",
+    "pillow>=11.0",
+    "httpx>=0.28",
+    "pyyaml>=6.0",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+    "aiofiles>=24.1",
+    "websockets>=14.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "httpx",  # for TestClient
+    "ruff>=0.9",
+]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

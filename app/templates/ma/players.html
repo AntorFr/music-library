@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% set active_nav = "players" %}
+
+{% block title %}Lecteurs — Music Library{% endblock %}
+{% block topbar_title %}Lecteurs Music Assistant{% endblock %}
+
+{% block content %}
+{% if players %}
+<div class="stats-grid">
+  {% for player in players %}
+  <div class="stat-card">
+    <div class="stat-icon"
+         style="background: rgba({% if player.available %}76,175,80{% else %}239,68,68{% endif %},0.1);
+                color: {% if player.available %}var(--success){% else %}var(--destructive){% endif %}">
+      <i class="mdi mdi-{% if 'sonos' in player.name|lower %}speaker-wireless{% elif 'web' in player.name|lower %}web{% else %}speaker{% endif %}"></i>
+    </div>
+    <div class="flex-1">
+      <div class="stat-value" style="font-size: 1rem;">{{ player.name }}</div>
+      <div class="stat-label">
+        {{ player.player_id[:16] }}…
+        <span class="badge {% if player.available %}badge-success{% else %}badge-danger{% endif %} ml-1">
+          {% if player.available %}En ligne{% else %}Hors ligne{% endif %}
+        </span>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+  <i class="mdi mdi-speaker-off"></i>
+  <p>Aucun lecteur disponible.<br>Vérifiez la connexion à Music Assistant.</p>
+</div>
+{% endif %}
+{% endblock %}

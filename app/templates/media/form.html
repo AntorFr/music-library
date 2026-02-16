@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% set active_nav = "media_new" if not item else "media" %}
+
+{% block title %}
+  {% if item %}Modifier « {{ item.title }} »{% else %}Ajouter un média{% endif %} — Music Library
+{% endblock %}
+
+{% block topbar_title %}
+  {% if item %}Modifier le média{% else %}Nouveau média{% endif %}
+{% endblock %}
+
+{% block content %}
+<div style="max-width: 700px;">
+  <form method="POST"
+        action="{% if item %}/media/{{ item.id }}/edit{% else %}/media/new{% endif %}"
+        enctype="multipart/form-data">
+
+    <div class="form-group">
+      <label class="form-label">Titre *</label>
+      <input type="text" name="title" class="form-control" required
+             value="{{ item.title if item else '' }}"
+             placeholder="Nom du média">
+    </div>
+
+    <div class="d-flex gap-3">
+      <div class="form-group flex-1">
+        <label class="form-label">Type *</label>
+        <select name="media_type" class="form-control" required>
+          {% for t in media_types %}
+          <option value="{{ t.value }}" {% if item and item.media_type.value == t.value %}selected{% endif %}>
+            {{ type_labels.get(t.value, t.value) }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group flex-1">
+        <label class="form-label">Fournisseur *</label>
+        <input type="text" name="provider" class="form-control" required
+               value="{{ item.provider if item else '' }}"
+               placeholder="spotify, youtube, etc.">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">URI Source *</label>
+      <input type="text" name="source_uri" class="form-control" required
+             value="{{ item.source_uri if item else '' }}"
+             placeholder="spotify://playlist/xxx">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">URL de couverture</label>
+      <input type="url" name="cover_url" class="form-control"
+             value="{{ item.cover_url or '' if item else '' }}"
+             placeholder="https://…/cover.jpg">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Durée (minutes)</label>
+      <input type="number" name="duration_min" class="form-control" min="0"
+             value="{{ item.duration_min or '' if item else '' }}"
+             placeholder="60">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Description</label>
+      <textarea name="description" class="form-control"
+                placeholder="Description optionnelle…">{{ item.description or '' if item else '' }}</textarea>
+    </div>
+
+    {% if item %}
+    <div class="form-group">
+      <label class="form-label">Actif</label>
+      <select name="is_active" class="form-control">
+        <option value="true" {% if item.is_active %}selected{% endif %}>Oui</option>
+        <option value="false" {% if not item.is_active %}selected{% endif %}>Non</option>
+      </select>
+    </div>
+    {% endif %}
+
+    <!-- Tags -->
+    <div class="form-group">
+      <label class="form-label">Tags</label>
+      <div class="d-flex flex-wrap gap-1 mb-2" id="selectedTags">
+        {% if item and item.tags %}
+          {% for tag in item.tags %}
+          <span class="tag-chip" data-tag-id="{{ tag.id if tag.id is defined else '' }}">
+            <i class="mdi mdi-tag"></i>
+            {{ tag.category }}:{{ tag.value }}
+            <input type="hidden" name="tag_ids" value="{{ tag.id if tag.id is defined else '' }}">
+            <span class="remove-tag" onclick="this.parentElement.remove()">
+              <i class="mdi mdi-close"></i>
+            </span>
+          </span>
+          {% endfor %}
+        {% endif %}
+      </div>
+      <div class="d-flex gap-2">
+        <select id="tagSelect" class="form-control" style="max-width: 350px;">
+          <option value="">— Sélectionner un tag —</option>
+          {% for tag in available_tags %}
+          <option value="{{ tag.id }}" data-label="{{ tag.category }}:{{ tag.value }}">
+            {{ tag.category }}:{{ tag.value }}
+          </option>
+          {% endfor %}
+        </select>
+        <button type="button" class="btn btn-surface btn-sm" onclick="addTag()">
+          <i class="mdi mdi-plus"></i>
+        </button>
+      </div>
+    </div>
+
+    <div class="d-flex gap-2 mt-4">
+      <button type="submit" class="btn btn-primary">
+        <i class="mdi mdi-check"></i>
+        {% if item %}Enregistrer{% else %}Créer{% endif %}
+      </button>
+      <a href="{% if item %}/media/{{ item.id }}{% else %}/media{% endif %}" class="btn btn-outline">
+        Annuler
+      </a>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function addTag() {
+  const sel = document.getElementById('tagSelect');
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt.value) return;
+
+  // Don't add duplicates
+  const existing = document.querySelectorAll('#selectedTags input[name="tag_ids"]');
+  for (const inp of existing) {
+    if (inp.value === opt.value) return;
+  }
+
+  const chip = document.createElement('span');
+  chip.className = 'tag-chip';
+  chip.innerHTML = `
+    <i class="mdi mdi-tag"></i>
+    ${opt.dataset.label}
+    <input type="hidden" name="tag_ids" value="${opt.value}">
+    <span class="remove-tag" onclick="this.parentElement.remove()">
+      <i class="mdi mdi-close"></i>
+    </span>
+  `;
+  document.getElementById('selectedTags').appendChild(chip);
+  sel.value = '';
+}
+</script>
+{% endblock %}

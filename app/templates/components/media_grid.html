@@ -1,0 +1,63 @@
+{# Build filter query string (without page) #}
+{% set _qs_parts = [] %}
+{% if search %}{% set _ = _qs_parts.append("search=" ~ search) %}{% endif %}
+{% if media_type %}{% set _ = _qs_parts.append("media_type=" ~ media_type) %}{% endif %}
+{% if provider %}{% set _ = _qs_parts.append("provider=" ~ provider) %}{% endif %}
+{% if tag_filters is defined %}{% for k, v in tag_filters.items() %}{% set _ = _qs_parts.append("tag_" ~ k ~ "=" ~ v) %}{% endfor %}{% endif %}
+{% set _qs = _qs_parts | join("&") %}
+
+{% if items %}
+<div class="media-grid">
+  {% for item in items %}
+  {% include "components/media_card.html" %}
+  {% endfor %}
+</div>
+
+{% if pages > 1 %}
+<div class="pagination">
+  {% if page > 1 %}
+  <a href="/media?page={{ page - 1 }}{% if _qs %}&{{ _qs }}{% endif %}"
+     hx-get="/media?page={{ page - 1 }}{% if _qs %}&{{ _qs }}{% endif %}"
+     hx-target="#media-results"
+     hx-push-url="true">
+    <i class="mdi mdi-chevron-left"></i>
+  </a>
+  {% endif %}
+
+  {% for p in range(1, pages + 1) %}
+    {% if p == page %}
+    <span class="active">{{ p }}</span>
+    {% elif p <= 3 or p > pages - 2 or (p >= page - 1 and p <= page + 1) %}
+    <a href="/media?page={{ p }}{% if _qs %}&{{ _qs }}{% endif %}"
+       hx-get="/media?page={{ p }}{% if _qs %}&{{ _qs }}{% endif %}"
+       hx-target="#media-results"
+       hx-push-url="true">{{ p }}</a>
+    {% elif p == 4 or p == pages - 2 %}
+    <span>…</span>
+    {% endif %}
+  {% endfor %}
+
+  {% if page < pages %}
+  <a href="/media?page={{ page + 1 }}{% if _qs %}&{{ _qs }}{% endif %}"
+     hx-get="/media?page={{ page + 1 }}{% if _qs %}&{{ _qs }}{% endif %}"
+     hx-target="#media-results"
+     hx-push-url="true">
+    <i class="mdi mdi-chevron-right"></i>
+  </a>
+  {% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="empty-state">
+  <i class="mdi mdi-music-box-multiple-outline"></i>
+  <p>Aucun média trouvé.</p>
+  {% if search or media_type or provider or (tag_filters is defined and tag_filters) %}
+  <a href="/media" class="btn btn-outline mt-3">Réinitialiser les filtres</a>
+  {% else %}
+  <a href="/media/new" class="btn btn-primary mt-3">
+    <i class="mdi mdi-plus"></i> Ajouter un média
+  </a>
+  {% endif %}
+</div>
+{% endif %}

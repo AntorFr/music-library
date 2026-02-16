@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% set active_nav = "browse" %}
+
+{% block title %}Parcourir Music Assistant — Music Library{% endblock %}
+{% block topbar_title %}Parcourir Music Assistant{% endblock %}
+
+{% block topbar_actions %}
+<div class="search-bar">
+  <i class="mdi mdi-magnify"></i>
+  <input type="search" id="maSearch" name="maSearch" placeholder="Rechercher dans Music Assistant…"
+         hx-get="/browse/search"
+         hx-target="#ma-results"
+         hx-trigger="input changed delay:400ms, search"
+         hx-include="#activeCategory"
+         hx-indicator="#searchSpinner">
+  <input type="hidden" id="activeCategory" name="category" value="all">
+</div>
+<span class="htmx-indicator" id="searchSpinner">
+  <div class="spinner"></div>
+</span>
+{% endblock %}
+
+{% block content %}
+<!-- Quick browse tabs -->
+<div class="filter-bar">
+  <button class="btn btn-surface btn-sm browse-tab active" data-type="all"
+          onclick="browseLibrary('all', this)">
+    <i class="mdi mdi-view-grid"></i> Tous
+  </button>
+  <button class="btn btn-outline btn-sm browse-tab" data-type="playlists"
+          onclick="browseLibrary('playlists', this)">
+    <i class="mdi mdi-playlist-music"></i> Playlists
+  </button>
+  <button class="btn btn-outline btn-sm browse-tab" data-type="albums"
+          onclick="browseLibrary('albums', this)">
+    <i class="mdi mdi-album"></i> Albums
+  </button>
+  <button class="btn btn-outline btn-sm browse-tab" data-type="tracks"
+          onclick="browseLibrary('tracks', this)">
+    <i class="mdi mdi-music-note"></i> Pistes
+  </button>
+  <button class="btn btn-outline btn-sm browse-tab" data-type="radios"
+          onclick="browseLibrary('radios', this)">
+    <i class="mdi mdi-radio"></i> Radios
+  </button>
+  <button class="btn btn-outline btn-sm browse-tab" data-type="audiobooks"
+          onclick="browseLibrary('audiobooks', this)">
+    <i class="mdi mdi-book-music"></i> Livres audio
+  </button>
+  <button class="btn btn-outline btn-sm browse-tab" data-type="podcasts"
+          onclick="browseLibrary('podcasts', this)">
+    <i class="mdi mdi-podcast"></i> Podcasts
+  </button>
+</div>
+
+<div id="ma-results">
+  <div class="empty-state">
+    <i class="mdi mdi-cloud-search-outline"></i>
+    <p>Recherchez ou parcourez la bibliothèque Music Assistant.</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function browseLibrary(type, btn) {
+  // Toggle active tab
+  document.querySelectorAll('.browse-tab').forEach(b => {
+    b.className = 'btn btn-outline btn-sm browse-tab';
+  });
+  btn.className = 'btn btn-surface btn-sm browse-tab active';
+
+  // Update hidden category so next search uses it
+  document.getElementById('activeCategory').value = type;
+
+  // If there is text in the search box, re-trigger search with new category
+  const searchInput = document.getElementById('maSearch');
+  if (searchInput.value.trim().length >= 2) {
+    htmx.trigger(searchInput, 'search');
+    return;
+  }
+
+  // No search text — browse the library
+  if (type === 'all') {
+    // "Tous" without search = show placeholder
+    document.getElementById('ma-results').innerHTML =
+      '<div class="empty-state"><i class="mdi mdi-cloud-search-outline"></i>' +
+      '<p>Tapez une recherche pour voir tous les types, ou sélectionnez une catégorie.</p></div>';
+    return;
+  }
+
+  const container = document.getElementById('ma-results');
+  container.innerHTML = '<div style="padding:40px;text-align:center"><div class="spinner" style="margin:auto"></div></div>';
+
+  try {
+    const resp = await fetch(`/browse/library/${type}`);
+    container.innerHTML = await resp.text();
+  } catch(e) {
+    container.innerHTML = '<div class="empty-state"><i class="mdi mdi-alert-circle"></i><p>Erreur de connexion à Music Assistant</p></div>';
+  }
+}
+
+async function importItem(uri, btn) {
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner" style="width:14px;height:14px"></div>';
+  try {
+    const resp = await fetch(`/browse/import?uri=${encodeURIComponent(uri)}`, {method: 'POST'});
+    if (resp.ok) {
+      const data = await resp.json();
+      btn.innerHTML = '<i class="mdi mdi-check"></i>';
+      btn.className = 'btn btn-sm' + ' btn-surface';
+      btn.style.color = 'var(--success)';
+      showToast('« ' + data.title + ' » importé !', 'success');
+    } else {
+      const err = await resp.json();
+      btn.innerHTML = '<i class="mdi mdi-alert"></i>';
+      showToast('Erreur : ' + (err.detail || 'Inconnu'), 'error');
+      btn.disabled = false;
+    }
+  } catch(e) {
+    btn.innerHTML = '<i class="mdi mdi-alert"></i>';
+    showToast('Erreur de connexion', 'error');
+    btn.disabled = false;
+  }
+}
+
+// Auto-load "Tous" on page load (shows placeholder)
+document.addEventListener('DOMContentLoaded', () => {
+  // Default to "Tous" tab active — no auto-fetch
+});
+</script>
+{% endblock %}

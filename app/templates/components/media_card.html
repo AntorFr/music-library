@@ -1,0 +1,20 @@
+<a href="/media/{{ item.id }}" class="media-card" hx-boost="true">
+  <div class="thumb-container">
+    <img src="/covers/{{ item.id }}.jpg" alt="{{ item.title }}"
+         loading="lazy"
+         onerror="this.src='/static/img/default_cover.svg'">
+    <div class="play-overlay">
+      <i class="mdi mdi-play"></i>
+    </div>
+  </div>
+  <div class="card-info">
+    <div class="card-title" title="{{ item.title }}">{{ item.title }}</div>
+    <div class="card-subtitle">
+      {% if item.metadata_extra and item.metadata_extra.get('artists') %}
+        {{ item.metadata_extra['artists'] }}
+      {% else %}
+        {{ item.media_type.value | capitalize }}
+      {% endif %}
+    </div>
+  </div>
+</a>

@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% set active_nav = "home" %}
+
+{% block title %}Accueil — Music Library{% endblock %}
+{% block topbar_title %}Accueil{% endblock %}
+
+{% block content %}
+<!-- Stats -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-icon"><i class="mdi mdi-music-box-multiple"></i></div>
+    <div>
+      <div class="stat-value">{{ stats.total }}</div>
+      <div class="stat-label">Médias au total</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon" style="background:rgba(76,175,80,0.1);color:var(--success)">
+      <i class="mdi mdi-check-circle"></i>
+    </div>
+    <div>
+      <div class="stat-value">{{ stats.active }}</div>
+      <div class="stat-label">Médias actifs</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon" style="background:rgba(255,152,0,0.1);color:var(--warning)">
+      <i class="mdi mdi-tag-multiple"></i>
+    </div>
+    <div>
+      <div class="stat-value">{{ stats.tags }}</div>
+      <div class="stat-label">Tags définis</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon" style="background:rgba(156,39,176,0.1);color:#9c27b0">
+      <i class="mdi mdi-speaker"></i>
+    </div>
+    <div>
+      <div class="stat-value">{{ stats.players }}</div>
+      <div class="stat-label">Lecteurs MA</div>
+    </div>
+  </div>
+</div>
+
+<!-- By type -->
+{% if stats.by_type %}
+<div class="section-header">
+  <h2>Par type</h2>
+</div>
+<div class="stats-grid mb-4">
+  {% for mtype, count in stats.by_type.items() %}
+  <div class="stat-card" style="cursor:pointer"
+       onclick="window.location='/media?media_type={{ mtype }}'">
+    <div class="stat-icon">
+      <i class="mdi mdi-{{ type_icons.get(mtype, 'music') }}"></i>
+    </div>
+    <div>
+      <div class="stat-value">{{ count }}</div>
+      <div class="stat-label">{{ type_labels.get(mtype, mtype) }}</div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Recent media -->
+<div class="section-header">
+  <h2>Ajouts récents</h2>
+  <a href="/media" class="btn btn-outline btn-sm">
+    <i class="mdi mdi-arrow-right"></i> Tout voir
+  </a>
+</div>
+
+{% if recent %}
+<div class="media-grid">
+  {% for item in recent %}
+  {% include "components/media_card.html" %}
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+  <i class="mdi mdi-music-box-multiple-outline"></i>
+  <p>Aucun média dans le catalogue.</p>
+  <a href="/media/new" class="btn btn-primary mt-3">
+    <i class="mdi mdi-plus"></i> Ajouter un média
+  </a>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,52 @@
+{# HTMX partial: MA search results grouped by type #}
+{% if has_results %}
+  {% for type_name, type_label, type_items in groups %}
+    {% if type_items %}
+    <div class="section-header mt-3">
+      <h2>{{ type_label }}</h2>
+      <span class="text-muted text-sm">{{ type_items|length }} résultat{{ 's' if type_items|length != 1 else '' }}</span>
+    </div>
+    <div class="media-grid">
+      {% for item in type_items %}
+      <div class="media-card" style="cursor:default">
+        <div class="thumb-container">
+          {% if item.thumb_url_resolved %}
+          <img src="{{ item.thumb_url_resolved }}" alt="{{ item.name }}" loading="lazy"
+               onerror="this.src='/static/img/default_cover.svg'">
+          {% else %}
+          <img src="/static/img/default_cover.svg" alt="{{ item.name }}">
+          {% endif %}
+        </div>
+        <div class="card-info">
+          <div class="card-title" title="{{ item.name }}">{{ item.name }}</div>
+          <div class="card-subtitle">
+            {% if item.get('artist_str') %}
+              {{ item['artist_str'] }}
+            {% elif item.get('media_type') %}
+              {{ item['media_type'] | capitalize }}
+            {% endif %}
+          </div>
+          {% if item.get('provider_label') %}
+          <span class="badge {{ item.provider_badge }} mt-1" style="font-size:0.7rem">
+            <i class="mdi {{ item.provider_icon }}"></i> {{ item.provider_label }}
+          </span>
+          {% endif %}
+          <div class="mt-2 d-flex gap-1">
+            <button class="btn btn-primary btn-sm"
+                    onclick="importItem('{{ item.uri }}', this)"
+                    title="Importer dans le catalogue">
+              <i class="mdi mdi-download"></i> Importer
+            </button>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  {% endfor %}
+{% else %}
+<div class="empty-state">
+  <i class="mdi mdi-magnify"></i>
+  <p>Aucun résultat trouvé.</p>
+</div>
+{% endif %}

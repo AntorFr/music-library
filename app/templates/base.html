@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Music Library{% endblock %}</title>
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg">
+  <link rel="apple-touch-icon" href="/static/img/favicon.svg">
+
+  <!-- Material Design Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
+
+  <!-- App stylesheet -->
+  <link rel="stylesheet" href="/static/css/app.css">
+
+  <!-- HTMX -->
+  <script src="https://unpkg.com/htmx.org@2.0.4"
+    integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+"
+    crossorigin="anonymous"></script>
+
+  {% block head_extra %}{% endblock %}
+</head>
+<body hx-boost="true">
+
+  <!-- Mobile sidebar toggle -->
+  <button class="sidebar-toggle" onclick="toggleSidebar()" id="sidebarToggle">
+    <i class="mdi mdi-menu"></i>
+  </button>
+
+  <!-- Mobile backdrop -->
+  <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
+
+  <div class="app-layout">
+
+    <!-- ===== Sidebar ===== -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <img src="/static/img/logo.svg" alt="ML" class="sidebar-logo"
+             onerror="this.style.display='none'">
+        <span class="sidebar-title">Music Library</span>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a href="/" class="{% if active_nav == 'home' %}active{% endif %}">
+          <i class="mdi mdi-home"></i>
+          <span>Accueil</span>
+        </a>
+        <a href="/media" class="{% if active_nav == 'media' %}active{% endif %}">
+          <i class="mdi mdi-music-box-multiple"></i>
+          <span>Catalogue</span>
+        </a>
+        <a href="/media/new" class="{% if active_nav == 'media_new' %}active{% endif %}">
+          <i class="mdi mdi-plus-circle"></i>
+          <span>Ajouter</span>
+        </a>
+        <a href="/tags" class="{% if active_nav == 'tags' %}active{% endif %}">
+          <i class="mdi mdi-tag-multiple"></i>
+          <span>Tags</span>
+        </a>
+        <a href="/browse" class="{% if active_nav == 'browse' %}active{% endif %}">
+          <i class="mdi mdi-cloud-search"></i>
+          <span>Parcourir MA</span>
+        </a>
+        <a href="/players" class="{% if active_nav == 'players' %}active{% endif %}">
+          <i class="mdi mdi-speaker"></i>
+          <span>Lecteurs</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <a href="/api/v1/health" target="_blank" class="text-sm text-muted d-flex align-center gap-1">
+          <i class="mdi mdi-heart-pulse"></i>
+          <span>Santé API</span>
+        </a>
+      </div>
+    </aside>
+
+    <!-- ===== Main ===== -->
+    <main class="main-content">
+      <div class="topbar">
+        <div class="topbar-title">{% block topbar_title %}{% endblock %}</div>
+        <div class="topbar-actions">
+          {% block topbar_actions %}{% endblock %}
+        </div>
+      </div>
+
+      <!-- Toast container -->
+      <div class="toast-container" id="toastContainer"></div>
+
+      <div class="page-content" id="main">
+        {% block content %}{% endblock %}
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // --- Sidebar mobile toggle ---
+    function toggleSidebar() {
+      document.getElementById('sidebar').classList.toggle('open');
+      document.getElementById('sidebarBackdrop').classList.toggle('show');
+    }
+    function closeSidebar() {
+      document.getElementById('sidebar').classList.remove('open');
+      document.getElementById('sidebarBackdrop').classList.remove('show');
+    }
+
+    // --- Toast notifications ---
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+      const icon = type === 'success' ? 'check-circle' :
+                   type === 'error' ? 'alert-circle' : 'information';
+      toast.innerHTML = `<i class="mdi mdi-${icon}"></i> ${message}`;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(20px)';
+        toast.style.transition = 'all 0.3s';
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+
+    // --- HTMX event listeners ---
+    document.body.addEventListener('htmx:afterRequest', function(e) {
+      if (e.detail.successful && e.detail.xhr.getResponseHeader('X-Toast-Message')) {
+        showToast(e.detail.xhr.getResponseHeader('X-Toast-Message'),
+                  e.detail.xhr.getResponseHeader('X-Toast-Type') || 'success');
+      }
+    });
+
+    document.body.addEventListener('htmx:responseError', function(e) {
+      showToast('Erreur: ' + (e.detail.xhr.statusText || 'Requête échouée'), 'error');
+    });
+
+    // Close sidebar on navigation (mobile)
+    document.body.addEventListener('htmx:afterSwap', function() {
+      closeSidebar();
+    });
+  </script>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

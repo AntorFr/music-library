@@ -1,0 +1,44 @@
+{# HTMX partial: MA library items rendered as a grid of cards with import button #}
+{% if items %}
+<div class="media-grid">
+  {% for item in items %}
+  <div class="media-card" style="cursor:default">
+    <div class="thumb-container">
+      {% if item.thumb_url_resolved %}
+      <img src="{{ item.thumb_url_resolved }}" alt="{{ item.name }}" loading="lazy"
+           onerror="this.src='/static/img/default_cover.svg'">
+      {% else %}
+      <img src="/static/img/default_cover.svg" alt="{{ item.name }}">
+      {% endif %}
+    </div>
+    <div class="card-info">
+      <div class="card-title" title="{{ item.name }}">{{ item.name }}</div>
+      <div class="card-subtitle">
+        {% if item.artist_str %}
+          {{ item.artist_str }}
+        {% elif item.media_type %}
+          {{ item.media_type | capitalize }}
+        {% endif %}
+      </div>
+      {% if item.provider_label is defined %}
+      <span class="badge {{ item.provider_badge }} mt-1" style="font-size:0.7rem">
+        <i class="mdi {{ item.provider_icon }}"></i> {{ item.provider_label }}
+      </span>
+      {% endif %}
+      <div class="mt-2 d-flex gap-1">
+        <button class="btn btn-primary btn-sm"
+                onclick="importItem('{{ item.uri }}', this)"
+                title="Importer dans le catalogue">
+          <i class="mdi mdi-download"></i> Importer
+        </button>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+  <i class="mdi mdi-music-box-multiple-outline"></i>
+  <p>Aucun élément trouvé.</p>
+</div>
+{% endif %}

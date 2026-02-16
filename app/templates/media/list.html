@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% set active_nav = "media" %}
+
+{% block title %}Catalogue — Music Library{% endblock %}
+{% block topbar_title %}Catalogue{% endblock %}
+
+{% block topbar_actions %}
+<div class="search-bar">
+  <i class="mdi mdi-magnify"></i>
+  <input type="search" name="search" placeholder="Rechercher…"
+         value="{{ search or '' }}"
+         hx-get="/media"
+         hx-target="#media-results"
+         hx-trigger="input changed delay:300ms, search"
+         hx-push-url="true"
+         hx-include="[name='media_type'],[name='provider'],[name^='tag_']">
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Filters -->
+<div class="filter-bar" style="flex-wrap: wrap;">
+  <select name="media_type"
+          hx-get="/media"
+          hx-target="#media-results"
+          hx-trigger="change"
+          hx-include="[name='search'],[name='provider'],[name^='tag_']"
+          hx-push-url="true">
+    <option value="">Tous les types</option>
+    {% for t in media_types %}
+    <option value="{{ t.value }}" {% if media_type == t.value %}selected{% endif %}>
+      {{ type_labels.get(t.value, t.value) }}
+    </option>
+    {% endfor %}
+  </select>
+
+  <select name="provider"
+          hx-get="/media"
+          hx-target="#media-results"
+          hx-trigger="change"
+          hx-include="[name='search'],[name='media_type'],[name^='tag_']"
+          hx-push-url="true">
+    <option value="">Tous les fournisseurs</option>
+    {% for p in providers %}
+    <option value="{{ p }}" {% if provider == p %}selected{% endif %}>{{ p }}</option>
+    {% endfor %}
+  </select>
+
+  {% for cat_slug, cat_values in tags_by_cat.items() %}
+  <select name="tag_{{ cat_slug }}"
+          hx-get="/media"
+          hx-target="#media-results"
+          hx-trigger="change"
+          hx-include="[name='search'],[name='media_type'],[name='provider'],[name^='tag_']:not([name='tag_{{ cat_slug }}'])"
+          hx-push-url="true">
+    <option value="">{{ cat_labels.get(cat_slug, cat_slug) }}</option>
+    {% for v in cat_values|sort %}
+    <option value="{{ v }}" {% if tag_filters.get(cat_slug) == v %}selected{% endif %}>{{ v }}</option>
+    {% endfor %}
+  </select>
+  {% endfor %}
+
+  {% if search or media_type or provider or tag_filters %}
+  <a href="/media" class="btn btn-outline btn-sm">
+    <i class="mdi mdi-close"></i> Réinitialiser
+  </a>
+  {% endif %}
+
+  <div class="flex-1"></div>
+
+  <span class="text-muted text-sm">{{ total }} média{{ 's' if total != 1 else '' }}</span>
+</div>
+
+<div id="media-results">
+  {% include "components/media_grid.html" %}
+</div>
+
+<a href="/media/new" class="btn-fab" title="Ajouter un média">
+  <i class="mdi mdi-plus"></i>
+</a>
+{% endblock %}

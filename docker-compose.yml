@@ -1,0 +1,17 @@
+services:
+  music-library:
+    # For local dev: build from source
+    # build: .
+    # For production: use pre-built image from GHCR
+    image: ghcr.io/antorfr/music-library:latest
+    container_name: music-library
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - ML_DATABASE_URL=sqlite+aiosqlite:///data/library.db
+      - ML_MUSIC_ASSISTANT_URL=http://mass:8095
+      - ML_MUSIC_ASSISTANT_TOKEN=
+      - ML_DEBUG=false
+    restart: unless-stopped

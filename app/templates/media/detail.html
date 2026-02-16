@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% set active_nav = "media" %}
+
+{% block title %}{{ item.title }} — Music Library{% endblock %}
+{% block topbar_title %}Détails du média{% endblock %}
+
+{% block topbar_actions %}
+<a href="/media/{{ item.id }}/edit" class="btn btn-surface btn-sm">
+  <i class="mdi mdi-pencil"></i> Modifier
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="detail-header">
+  <img src="/covers/{{ item.id }}.jpg" alt="{{ item.title }}" class="detail-cover"
+       onerror="this.src='/static/img/default_cover.svg'">
+
+  <div class="detail-info">
+    <h1>{{ item.title }}</h1>
+
+    {% if item.metadata_extra and item.metadata_extra.get('artists') %}
+    <p class="text-muted" style="font-size: 1.05rem;">{{ item.metadata_extra['artists'] }}</p>
+    {% endif %}
+
+    {% if item.metadata_extra and item.metadata_extra.get('album') %}
+    <p class="text-muted text-sm">Album : {{ item.metadata_extra['album'] }}</p>
+    {% endif %}
+
+    <div class="detail-meta">
+      <span class="badge badge-primary">
+        <i class="mdi mdi-{{ type_icons.get(item.media_type.value, 'music') }}"></i>
+        {{ type_labels.get(item.media_type.value, item.media_type.value) }}
+      </span>
+      <span class="badge badge-surface">
+        <i class="mdi mdi-cloud"></i>
+        {{ item.provider }}
+      </span>
+      {% if item.duration_min %}
+      <span class="badge badge-surface">
+        <i class="mdi mdi-clock-outline"></i>
+        {{ item.duration_min }} min
+      </span>
+      {% endif %}
+      <span class="badge {% if item.is_active %}badge-success{% else %}badge-danger{% endif %}">
+        <i class="mdi mdi-{% if item.is_active %}check-circle{% else %}close-circle{% endif %}"></i>
+        {% if item.is_active %}Actif{% else %}Inactif{% endif %}
+      </span>
+    </div>
+
+    <!-- Tags -->
+    {% if item.tags %}
+    <div class="d-flex flex-wrap gap-1 mt-2">
+      {% for tag in item.tags %}
+      <span class="tag-chip">
+        <i class="mdi mdi-tag"></i>
+        {{ tag.category }}:{{ tag.value }}
+      </span>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="detail-actions">
+      {% if players %}
+      <div class="d-flex align-center gap-2">
+        <select id="playerSelect" class="form-control" style="max-width:250px;padding:6px 10px;font-size:0.85rem">
+          {% for p in players %}
+          <option value="{{ p.player_id }}">{{ p.name }}</option>
+          {% endfor %}
+        </select>
+        <button class="btn btn-primary btn-sm"
+                onclick="playMedia()">
+          <i class="mdi mdi-play"></i> Lire
+        </button>
+      </div>
+      {% endif %}
+
+      <a href="/media/{{ item.id }}/edit" class="btn btn-surface btn-sm">
+        <i class="mdi mdi-pencil"></i> Modifier
+      </a>
+      <button class="btn btn-danger btn-sm"
+              hx-delete="/api/v1/media/{{ item.id }}"
+              hx-confirm="Supprimer « {{ item.title }} » ?"
+              hx-target="body"
+              hx-headers='{"Accept": "text/html"}'>
+        <i class="mdi mdi-delete"></i> Supprimer
+      </button>
+    </div>
+  </div>
+</div>
+
+{% if item.description %}
+<div class="card mt-3">
+  <div class="card-body">
+    <h3 class="mb-2">Description</h3>
+    <p class="text-muted">{{ item.description }}</p>
+  </div>
+</div>
+{% endif %}
+
+<div class="card mt-3">
+  <div class="card-body">
+    <h3 class="mb-2">Informations</h3>
+    <table style="border:none;background:transparent">
+      <tbody>
+        <tr>
+          <td class="text-muted" style="width:180px;border:none">ID</td>
+          <td style="border:none;font-family:monospace;font-size:0.8rem">{{ item.id }}</td>
+        </tr>
+        <tr>
+          <td class="text-muted" style="border:none">URI Source</td>
+          <td style="border:none;font-family:monospace;font-size:0.8rem">{{ item.source_uri }}</td>
+        </tr>
+        <tr>
+          <td class="text-muted" style="border:none">Créé le</td>
+          <td style="border:none">{{ item.created_at.strftime('%d/%m/%Y à %H:%M') }}</td>
+        </tr>
+        <tr>
+          <td class="text-muted" style="border:none">Modifié le</td>
+          <td style="border:none">{{ item.updated_at.strftime('%d/%m/%Y à %H:%M') }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function playMedia() {
+  const queueId = document.getElementById('playerSelect').value;
+  const uri = '{{ item.source_uri }}';
+  try {
+    const resp = await fetch(`/api/v1/ma/play?queue_id=${encodeURIComponent(queueId)}&uri=${encodeURIComponent(uri)}`, {method: 'POST'});
+    if (resp.ok) {
+      showToast('Lecture lancée !', 'success');
+    } else {
+      const err = await resp.json();
+      showToast('Erreur : ' + (err.detail || 'Inconnu'), 'error');
+    }
+  } catch(e) {
+    showToast('Erreur de connexion', 'error');
+  }
+}
+</script>
+{% endblock %}
