@@ -209,6 +209,32 @@ async def delete_media(db: AsyncSession, media_id: str, hard: bool = False) -> b
 
 
 # ---------------------------------------------------------------------------
+# Tag management (add/remove on a media item)
+# ---------------------------------------------------------------------------
+
+async def add_tag_to_media(db: AsyncSession, media_id: str, category: str, value: str) -> Media | None:
+    """Add a tag to a media item. Returns the updated media or None."""
+    media = await get_media(db, media_id)
+    if not media:
+        return None
+    tag = await _get_or_create_tag(db, category, value)
+    if tag not in media.tags:
+        media.tags.append(tag)
+        await db.flush()
+    return media
+
+
+async def remove_tag_from_media(db: AsyncSession, media_id: str, tag_id: int) -> Media | None:
+    """Remove a tag from a media item. Returns the updated media or None."""
+    media = await get_media(db, media_id)
+    if not media:
+        return None
+    media.tags = [t for t in media.tags if t.id != tag_id]
+    await db.flush()
+    return media
+
+
+# ---------------------------------------------------------------------------
 # Intelligent selection
 # ---------------------------------------------------------------------------
 

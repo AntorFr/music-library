@@ -185,10 +185,12 @@ async def media_list(
 @router.get("/media/new", response_class=HTMLResponse)
 async def media_new_form(request: Request, db: AsyncSession = Depends(get_db)):
     all_tags = await list_tags(db)
+    cat_labels = {c.slug: c.label for c in await list_tag_categories(db)}
     return templates.TemplateResponse("media/form.html", _base_ctx(
         request,
         item=None,
         available_tags=all_tags,
+        cat_labels=cat_labels,
         media_types=list(MediaType),
     ))
 
@@ -243,11 +245,62 @@ async def media_detail(request: Request, media_id: str, db: AsyncSession = Depen
     except Exception:
         pass
 
+    # Tags grouped by category for inline add
+    categories = await list_tag_categories(db)
+    all_tags = await list_tags(db)
+    tags_by_cat: dict[str, list[str]] = {}
+    for t in all_tags:
+        tags_by_cat.setdefault(t.category, []).append(t.value)
+    cat_labels = {c.slug: c.label for c in categories}
+
     return templates.TemplateResponse("media/detail.html", _base_ctx(
         request,
         item=item,
         players=players,
+        tags_by_cat=tags_by_cat,
+        cat_labels=cat_labels,
     ))
+
+
+@router.post("/media/{media_id}/tags", response_class=HTMLResponse)
+async def media_add_tag(
+    request: Request,
+    media_id: str,
+    category: str = Form(...),
+    value: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Add a tag to a media item and return the updated tags partial."""
+    item = await media_service.add_tag_to_media(db, media_id, category, value)
+    if not item:
+        raise HTTPException(404, detail="Média introuvable")
+    await db.commit()
+    cat_labels = {c.slug: c.label for c in await list_tag_categories(db)}
+    return templates.TemplateResponse("components/media_tags.html", {
+        "request": request,
+        "item": item,
+        "cat_labels": cat_labels,
+    })
+
+
+@router.delete("/media/{media_id}/tags/{tag_id}", response_class=HTMLResponse)
+async def media_remove_tag(
+    request: Request,
+    media_id: str,
+    tag_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Remove a tag from a media item and return the updated tags partial."""
+    item = await media_service.remove_tag_from_media(db, media_id, tag_id)
+    if not item:
+        raise HTTPException(404, detail="Média introuvable")
+    await db.commit()
+    cat_labels = {c.slug: c.label for c in await list_tag_categories(db)}
+    return templates.TemplateResponse("components/media_tags.html", {
+        "request": request,
+        "item": item,
+        "cat_labels": cat_labels,
+    })
 
 
 @router.get("/media/{media_id}/edit", response_class=HTMLResponse)
@@ -256,10 +309,12 @@ async def media_edit_form(request: Request, media_id: str, db: AsyncSession = De
     if not item:
         raise HTTPException(404, detail="Média introuvable")
     all_tags = await list_tags(db)
+    cat_labels = {c.slug: c.label for c in await list_tag_categories(db)}
     return templates.TemplateResponse("media/form.html", _base_ctx(
         request,
         item=item,
         available_tags=all_tags,
+        cat_labels=cat_labels,
         media_types=list(MediaType),
     ))
 

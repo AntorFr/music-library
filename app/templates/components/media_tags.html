@@ -1,0 +1,21 @@
+{# Partial: inline tag list with add/remove for media detail page #}
+<div id="media-tags">
+  <div class="d-flex flex-wrap gap-1 mb-2">
+    {% for tag in item.tags %}
+    <span class="tag-chip d-flex align-center gap-1">
+      <i class="mdi mdi-tag"></i>
+      <span class="text-muted text-sm">{{ cat_labels.get(tag.category, tag.category) }}:</span>{{ tag.value | capitalize }}
+      <button class="tag-remove-btn"
+              hx-delete="/media/{{ item.id }}/tags/{{ tag.id }}"
+              hx-target="#media-tags"
+              hx-swap="outerHTML"
+              title="Retirer ce tag">
+        <i class="mdi mdi-close"></i>
+      </button>
+    </span>
+    {% endfor %}
+    {% if not item.tags %}
+    <span class="text-muted text-sm">Aucun tag</span>
+    {% endif %}
+  </div>
+</div>

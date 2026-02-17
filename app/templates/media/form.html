@@ -87,7 +87,7 @@
           {% for tag in item.tags %}
           <span class="tag-chip" data-tag-id="{{ tag.id if tag.id is defined else '' }}">
             <i class="mdi mdi-tag"></i>
-            {{ tag.category }}:{{ tag.value }}
+            {{ cat_labels.get(tag.category, tag.category) }}:{{ tag.value | capitalize }}
             <input type="hidden" name="tag_ids" value="{{ tag.id if tag.id is defined else '' }}">
             <span class="remove-tag" onclick="this.parentElement.remove()">
               <i class="mdi mdi-close"></i>
@@ -100,8 +100,8 @@
         <select id="tagSelect" class="form-control" style="max-width: 350px;">
           <option value="">— Sélectionner un tag —</option>
           {% for tag in available_tags %}
-          <option value="{{ tag.id }}" data-label="{{ tag.category }}:{{ tag.value }}">
-            {{ tag.category }}:{{ tag.value }}
+          <option value="{{ tag.id }}" data-label="{{ cat_labels.get(tag.category, tag.category) }}:{{ tag.value | capitalize }}">
+            {{ cat_labels.get(tag.category, tag.category) }}:{{ tag.value | capitalize }}
           </option>
           {% endfor %}
         </select>
