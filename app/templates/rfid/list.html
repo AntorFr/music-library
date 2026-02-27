@@ -31,7 +31,16 @@
           {% for t in tags %}
           <tr data-assigned="{{ 'assigned' if t.media_id else 'unassigned' }}">
             <td style="font-family: monospace; font-size: .85rem;">{{ t.uid }}</td>
-            <td>{{ t.name }}</td>
+            <td>
+              <form method="POST" action="/rfid" class="d-flex gap-1" style="align-items:center;">
+                <input type="hidden" name="uid" value="{{ t.uid }}">
+                <input type="text" name="name" class="form-control form-control-sm"
+                       value="{{ t.name }}" style="min-width:220px;" aria-label="Nom du tag RFID">
+                <button type="submit" class="btn btn-outline btn-sm btn-icon" title="Enregistrer">
+                  <i class="mdi mdi-content-save"></i>
+                </button>
+              </form>
+            </td>
             <td>
               {% if t.media_id %}
                 <a href="/media/{{ t.media_id }}" class="badge badge-surface">

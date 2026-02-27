@@ -17,10 +17,20 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TypeVar
+import unicodedata
 
 from app.schemas.media import SelectionFallback, TagFilter, TagQueryGroup
 
 T = TypeVar("T")
+
+
+def normalize_select_token(value: str) -> str:
+    text = (value or "").strip().casefold()
+    if not text:
+        return ""
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return text
 
 
 def split_csv(value: str | None) -> list[str]:
@@ -80,7 +90,12 @@ def parse_tag_filters_from_qsl(
         elif key.startswith("tag_"):
             category = key[len("tag_") :]
 
-        values = split_csv(raw_value)
+        category = (category or "").strip().casefold()
+        if not category:
+            continue
+
+        values = [normalize_select_token(v) for v in split_csv(raw_value)]
+        values = [v for v in values if v]
         if not values:
             continue
 

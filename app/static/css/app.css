@@ -340,6 +340,10 @@ h4 { font-size: 1rem; font-weight: 700; }
   transition: var(--transition);
 }
 
+.card.overflow-visible {
+  overflow: visible;
+}
+
 .card:hover {
   background: #292929;
 }
@@ -498,6 +502,121 @@ h4 { font-size: 1rem; font-weight: 700; }
 .tag-remove-btn:hover {
   opacity: 1;
   color: var(--destructive);
+}
+
+/* --- Tag picker (HA-like combo box) ------------------------------------- */
+.tag-picker {
+  position: relative;
+  flex: 1 1 420px;
+  max-width: 680px;
+}
+
+.tag-picker-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 6px);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: auto;
+  max-height: 280px;
+  padding: 6px;
+  z-index: 1200;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag-picker-item {
+  width: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent !important;
+  background-color: transparent !important;
+  color: var(--fg);
+  cursor: pointer;
+  text-align: left;
+  line-height: 1.2;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  box-shadow: none;
+  outline: none;
+  font: inherit;
+}
+
+.tag-picker-item:hover {
+  background: transparent;
+}
+
+.tag-picker-item.active {
+  background: transparent;
+}
+
+.tag-picker-chip {
+  width: auto;
+  max-width: 100%;
+  justify-content: flex-start;
+  border-radius: 999px;
+  color: var(--fg);
+}
+
+.tag-picker-item:hover .tag-picker-chip {
+  background: #383838;
+  color: var(--fg);
+}
+
+.tag-picker-item.active .tag-picker-chip {
+  border-color: rgba(3, 169, 244, 0.45);
+}
+
+.tag-picker-chip .text-muted {
+  color: var(--fg-muted);
+}
+
+.rfid-picker-chip {
+  gap: 6px;
+}
+
+.rfid-picker-uid {
+  margin-left: 6px;
+  font-family: monospace;
+  font-size: 0.8rem;
+  color: var(--fg-muted);
+}
+
+.tag-picker-cat {
+  color: var(--fg-muted);
+  font-size: 0.8rem;
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  max-width: 45%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-left: auto;
+}
+
+.tag-picker-val {
+  flex: 1 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+
+.tag-picker-empty {
+  padding: 10px;
+  color: var(--fg-muted);
+  font-size: 0.85rem;
+  flex: 0 0 100%;
 }
 
 .form-control-sm {

@@ -33,7 +33,10 @@
           {% for tag in tags %}
           <tr data-category="{{ tag.category }}">
             <td>
-              <span class="badge badge-primary">{{ cat_labels.get(tag.category, tag.category) }}</span>
+              <span class="badge badge-surface">
+                <i class="mdi mdi-tag" style="color: {{ cat_colors.get(tag.category, 'var(--primary)') }};"></i>
+                {{ cat_labels.get(tag.category, tag.category) }}
+              </span>
             </td>
             <td>{{ tag.value | capitalize }}</td>
             <td class="text-right">
@@ -89,30 +92,52 @@
         <!-- Existing categories -->
         <div class="mb-3" id="categoryList">
           {% for cat in categories %}
-          <div class="d-flex align-items-center mb-1" style="justify-content: space-between;"
-               id="cat-{{ cat.slug }}">
-            <div>
-              <span class="badge badge-primary">{{ cat.label }}</span>
-              <span class="text-muted text-sm ml-1">{{ cat.slug }}</span>
-              <span class="text-muted text-sm">({{ cat.tags|length }} tag{{ 's' if cat.tags|length != 1 else '' }})</span>
+          <div style="margin-bottom: .75rem;" id="cat-{{ cat.slug }}">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem;">
+              <div>
+                <span class="badge badge-surface">
+                  <i class="mdi mdi-tag" style="color: {{ cat.color or 'var(--primary)' }};"></i>
+                  {{ cat.label }}
+                </span>
+                <div class="text-muted text-sm" style="margin-top: .15rem;">
+                  {{ cat.slug }} ({{ cat.tags|length }} tag{{ 's' if cat.tags|length != 1 else '' }})
+                </div>
+              </div>
+              <div class="d-flex align-center gap-1">
+                <form method="POST" action="/tags/categories" class="d-flex align-center gap-1">
+                  <input type="hidden" name="slug" value="{{ cat.slug }}">
+                  <input type="hidden" name="label" value="{{ cat.label }}">
+                  <select name="color"
+                          class="form-control form-control-sm"
+                          title="Couleur de la catégorie"
+                          style="min-width: 170px;"
+                          onchange="this.form.submit()">
+                    {% for key, label, hex in tag_color_choices %}
+                    <option value="{{ hex }}"
+                      {% if (cat.color or '#03a9f4') == hex %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                </form>
+
+                {% if cat.tags|length == 0 %}
+                <button class="btn btn-outline btn-sm btn-icon"
+                        hx-delete="/tags/categories/{{ cat.slug }}"
+                        hx-confirm="Supprimer la catégorie « {{ cat.label }} » ?"
+                        hx-target="#cat-{{ cat.slug }}"
+                        hx-swap="outerHTML"
+                        title="Supprimer">
+                  <i class="mdi mdi-delete"></i>
+                </button>
+                {% endif %}
+              </div>
             </div>
-            {% if cat.tags|length == 0 %}
-            <button class="btn btn-outline btn-sm btn-icon"
-                    hx-delete="/tags/categories/{{ cat.slug }}"
-                    hx-confirm="Supprimer la catégorie « {{ cat.label }} » ?"
-                    hx-target="#cat-{{ cat.slug }}"
-                    hx-swap="outerHTML"
-                    title="Supprimer">
-              <i class="mdi mdi-delete"></i>
-            </button>
-            {% endif %}
           </div>
           {% endfor %}
         </div>
 
         <hr style="border-color: rgba(255,255,255,.1); margin: .75rem 0;">
 
-        <!-- Add category form -->
+        <!-- Add / update category form -->
         <form method="POST" action="/tags/categories">
           <div class="form-group">
             <label class="form-label">Identifiant (slug)</label>
@@ -126,8 +151,17 @@
             <input type="text" name="label" class="form-control" required
                    placeholder="ex: Ambiance, Public cible">
           </div>
+          <div class="form-group">
+            <label class="form-label">Couleur</label>
+            <select name="color" class="form-control" required>
+              {% for key, label, hex in tag_color_choices %}
+              <option value="{{ hex }}" {% if hex == '#03a9f4' %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            <div class="text-muted text-sm mt-1">Optionnel: tu peux aussi mettre à jour une catégorie existante en réutilisant son slug.</div>
+          </div>
           <button type="submit" class="btn btn-primary w-100">
-            <i class="mdi mdi-plus"></i> Ajouter une catégorie
+            <i class="mdi mdi-content-save"></i> Enregistrer la catégorie
           </button>
         </form>
       </div>

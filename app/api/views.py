@@ -27,6 +27,7 @@ from app.services.tag_service import (
     get_tag,
     list_tag_categories,
     list_tags,
+    get_cat_colors,
 )
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,29 @@ TYPE_ICONS: dict[str, str] = {
     "album": "album",
     "track": "music-note",
 }
+
+TAG_COLOR_CHOICES: list[tuple[str, str, str]] = [
+    ("red", "Rouge", "#f44336"),
+    ("pink", "Rose", "#e91e63"),
+    ("purple", "Violet", "#9c27b0"),
+    ("deep-purple", "Violet foncé", "#673ab7"),
+    ("indigo", "Indigo", "#3f51b5"),
+    ("blue", "Bleu", "#2196f3"),
+    ("light-blue", "Bleu clair", "#03a9f4"),
+    ("cyan", "Cyan", "#00bcd4"),
+    ("teal", "Turquoise", "#009688"),
+    ("green", "Vert", "#4caf50"),
+    ("light-green", "Vert clair", "#8bc34a"),
+    ("lime", "Citron vert", "#cddc39"),
+    ("yellow", "Jaune", "#ffeb3b"),
+    ("amber", "Ambre", "#ffc107"),
+    ("orange", "Orange", "#ff9800"),
+    ("deep-orange", "Orange foncé", "#ff5722"),
+    ("brown", "Marron", "#795548"),
+    ("grey", "Gris", "#9e9e9e"),
+    ("blue-grey", "Bleu gris", "#607d8b"),
+]
+TAG_COLOR_ALLOWED = {hex_color for _key, _label, hex_color in TAG_COLOR_CHOICES}
 
 
 def _base_ctx(request: Request, **extra: Any) -> dict:
@@ -263,12 +287,15 @@ async def media_list(
 @router.get("/media/new", response_class=HTMLResponse)
 async def media_new_form(request: Request, db: AsyncSession = Depends(get_db)):
     all_tags = await list_tags(db)
-    cat_labels = {c.slug: c.label for c in await list_tag_categories(db)}
+    categories = await list_tag_categories(db)
+    cat_labels = {c.slug: c.label for c in categories}
+    cat_colors = {c.slug: c.color for c in categories if getattr(c, "color", None)}
     return templates.TemplateResponse("media/form.html", _base_ctx(
         request,
         item=None,
         available_tags=all_tags,
         cat_labels=cat_labels,
+        cat_colors=cat_colors,
         media_types=list(MediaType),
     ))
 
@@ -327,6 +354,7 @@ async def media_detail(request: Request, media_id: str, db: AsyncSession = Depen
     categories = await list_tag_categories(db)
     all_tags = await list_tags(db)
     cat_labels = {c.slug: c.label for c in categories}
+    cat_colors = {c.slug: c.color for c in categories if getattr(c, "color", None)}
     available_tag_options = _build_available_tag_options(
         item=item,
         all_tags=all_tags,
@@ -348,6 +376,7 @@ async def media_detail(request: Request, media_id: str, db: AsyncSession = Depen
         item=item,
         players=players,
         cat_labels=cat_labels,
+        cat_colors=cat_colors,
         available_tag_options=available_tag_options,
         assigned_rfid=assigned_rfid,
         available_rfid=available_rfid,
@@ -356,6 +385,7 @@ async def media_detail(request: Request, media_id: str, db: AsyncSession = Depen
 
 @router.post("/media/{media_id}/rfid")
 async def media_assign_rfid(
+    request: Request,
     media_id: str,
     rfid_uids: list[str] = Form(default=[]),
     db: AsyncSession = Depends(get_db),
@@ -365,17 +395,46 @@ async def media_assign_rfid(
         await db.commit()
     except rfid_service.RFIDAlreadyAssignedError as exc:
         raise HTTPException(409, detail=f"Tag RFID déjà associé: {exc.uid}")
+
+    if request.headers.get("HX-Target") == "rfid-assigned":
+        item = await media_service.get_media(db, media_id)
+        if not item:
+            raise HTTPException(404, detail="Média introuvable")
+        assigned_rfid = [
+            {"uid": t.uid, "name": t.name}
+            for t in (getattr(item, "rfid_tags", []) or [])
+        ]
+        return templates.TemplateResponse(
+            "components/rfid_assigned.html",
+            _base_ctx(request, item=item, assigned_rfid=assigned_rfid),
+        )
+
     return RedirectResponse(f"/media/{media_id}", status_code=303)
 
 
 @router.post("/media/{media_id}/rfid/{uid}/remove")
 async def media_unassign_rfid(
+    request: Request,
     media_id: str,
     uid: str,
     db: AsyncSession = Depends(get_db),
 ):
     await rfid_service.unassign_rfid_tag(db, uid=uid)
     await db.commit()
+
+    if request.headers.get("HX-Target") == "rfid-assigned":
+        item = await media_service.get_media(db, media_id)
+        if not item:
+            raise HTTPException(404, detail="Média introuvable")
+        assigned_rfid = [
+            {"uid": t.uid, "name": t.name}
+            for t in (getattr(item, "rfid_tags", []) or [])
+        ]
+        return templates.TemplateResponse(
+            "components/rfid_assigned.html",
+            _base_ctx(request, item=item, assigned_rfid=assigned_rfid),
+        )
+
     return RedirectResponse(f"/media/{media_id}", status_code=303)
 
 
@@ -389,7 +448,9 @@ async def media_add_tag(
     db: AsyncSession = Depends(get_db),
 ):
     """Add a tag to a media item and return the updated tags block partial."""
-    cat_labels = {c.slug: c.label for c in await list_tag_categories(db)}
+    categories = await list_tag_categories(db)
+    cat_labels = {c.slug: c.label for c in categories}
+    cat_colors = {c.slug: c.color for c in categories if getattr(c, "color", None)}
 
     if tag:
         category, value = _parse_tag_input(raw=tag, cat_labels=cat_labels)
@@ -407,10 +468,19 @@ async def media_add_tag(
         all_tags=all_tags,
         cat_labels=cat_labels,
     )
+    if request.headers.get("HX-Target") == "media-tags":
+        return templates.TemplateResponse("components/media_tags.html", {
+            "request": request,
+            "item": item,
+            "cat_labels": cat_labels,
+            "cat_colors": cat_colors,
+        })
+
     return templates.TemplateResponse("components/media_tags_block.html", {
         "request": request,
         "item": item,
         "cat_labels": cat_labels,
+        "cat_colors": cat_colors,
         "available_tag_options": available_tag_options,
     })
 
@@ -427,17 +497,28 @@ async def media_remove_tag(
     if not item:
         raise HTTPException(404, detail="Média introuvable")
     await db.commit()
-    cat_labels = {c.slug: c.label for c in await list_tag_categories(db)}
+    categories = await list_tag_categories(db)
+    cat_labels = {c.slug: c.label for c in categories}
+    cat_colors = {c.slug: c.color for c in categories if getattr(c, "color", None)}
     all_tags = await list_tags(db)
     available_tag_options = _build_available_tag_options(
         item=item,
         all_tags=all_tags,
         cat_labels=cat_labels,
     )
+    if request.headers.get("HX-Target") == "media-tags":
+        return templates.TemplateResponse("components/media_tags.html", {
+            "request": request,
+            "item": item,
+            "cat_labels": cat_labels,
+            "cat_colors": cat_colors,
+        })
+
     return templates.TemplateResponse("components/media_tags_block.html", {
         "request": request,
         "item": item,
         "cat_labels": cat_labels,
+        "cat_colors": cat_colors,
         "available_tag_options": available_tag_options,
     })
 
@@ -448,12 +529,15 @@ async def media_edit_form(request: Request, media_id: str, db: AsyncSession = De
     if not item:
         raise HTTPException(404, detail="Média introuvable")
     all_tags = await list_tags(db)
-    cat_labels = {c.slug: c.label for c in await list_tag_categories(db)}
+    categories = await list_tag_categories(db)
+    cat_labels = {c.slug: c.label for c in categories}
+    cat_colors = {c.slug: c.color for c in categories if getattr(c, "color", None)}
     return templates.TemplateResponse("media/form.html", _base_ctx(
         request,
         item=item,
         available_tags=all_tags,
         cat_labels=cat_labels,
+        cat_colors=cat_colors,
         media_types=list(MediaType),
     ))
 
@@ -507,11 +591,14 @@ async def tags_page(request: Request, db: AsyncSession = Depends(get_db)):
     all_tags = await list_tags(db)
     categories = await list_tag_categories(db)
     cat_labels = {c.slug: c.label for c in categories}
+    cat_colors = {c.slug: c.color for c in categories if getattr(c, "color", None)}
     return templates.TemplateResponse("tags/list.html", _base_ctx(
         request,
         tags=all_tags,
         categories=categories,
         cat_labels=cat_labels,
+        cat_colors=cat_colors,
+        tag_color_choices=TAG_COLOR_CHOICES,
     ))
 
 
@@ -532,10 +619,18 @@ async def tags_category_create(
     request: Request,
     slug: str = Form(...),
     label: str = Form(...),
+    color: str = Form(""),
     db: AsyncSession = Depends(get_db),
 ):
-    from app.services.tag_service import get_or_create_tag_category
-    await get_or_create_tag_category(db, slug, label)
+    normalized_color = (color or "").strip().lower()
+    if normalized_color and normalized_color not in TAG_COLOR_ALLOWED:
+        raise HTTPException(400, detail="Couleur invalide (hors palette prédéfinie)")
+
+    from app.services.tag_service import upsert_tag_category
+    try:
+        await upsert_tag_category(db, slug, label, color=normalized_color)
+    except ValueError:
+        raise HTTPException(400, detail="Couleur invalide")
     await db.commit()
     return RedirectResponse("/tags", status_code=303)
 

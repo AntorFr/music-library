@@ -1,0 +1,36 @@
+{# Partial: RFID card (assigned + picker) for media detail page #}
+<div class="card mt-3 overflow-visible" id="rfid-card">
+  <div class="card-body">
+    <h3 class="mb-2"><i class="mdi mdi-nfc"></i> Tags RFID</h3>
+
+    {% include "components/rfid_assigned.html" %}
+
+    <form class="d-flex gap-2 align-center" style="flex-wrap: wrap;"
+          method="POST"
+          action="/media/{{ item.id }}/rfid">
+      <div class="tag-picker" data-rfid-picker data-post-url="/media/{{ item.id }}/rfid">
+        <input type="search"
+               class="form-control form-control-sm"
+               style="width:100%;min-width:320px;max-width:680px;padding:6px 10px;font-size:0.85rem;"
+               placeholder="Associer un tag RFID…"
+               autocomplete="off"
+               data-rfid-picker-input
+               aria-label="Associer un tag RFID"
+               {% if not available_rfid or available_rfid|length == 0 %}disabled{% endif %}>
+
+        <div class="tag-picker-menu" data-rfid-picker-menu hidden></div>
+        <script type="application/json" data-rfid-picker-options>{{ available_rfid | tojson }}</script>
+      </div>
+
+      <a href="/rfid" class="btn btn-outline btn-sm">
+        <i class="mdi mdi-pencil"></i> Gérer les tags RFID
+      </a>
+    </form>
+
+    {% if not available_rfid or available_rfid|length == 0 %}
+    <div class="text-muted text-sm mt-2">
+      Aucun tag RFID disponible (tous sont déjà associés ou aucun n'a été créé).
+    </div>
+    {% endif %}
+  </div>
+</div>

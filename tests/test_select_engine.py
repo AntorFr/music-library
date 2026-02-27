@@ -36,6 +36,21 @@ def test_parse_tag_filters_from_qsl_order_and_csv():
     assert parsed.exclude_values["mood"] == {"angry"}
 
 
+def test_parse_tag_filters_normalizes_case_and_accents():
+    pairs = [
+        ("Owner", "Sébastien"),
+        ("mood", "Calme"),
+        ("time_of_day", "Soirée"),
+    ]
+
+    parsed = parse_tag_filters_from_qsl(pairs, reserved_keys=set())
+
+    assert parsed.include_order == ["owner", "mood", "time_of_day"]
+    assert parsed.include_values["owner"] == {"sebastien"}
+    assert parsed.include_values["mood"] == {"calme"}
+    assert parsed.include_values["time_of_day"] == {"soiree"}
+
+
 def test_evaluate_group_nested_any_of_and_none_of():
     group = TagQueryGroup(
         all_of=[TagFilter(category="owner", values=["papa"])],

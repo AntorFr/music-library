@@ -22,7 +22,7 @@ async def list_categories(db: AsyncSession = Depends(get_db)):
     cats = await tag_service.list_tag_categories(db)
     out = []
     for c in cats:
-        out.append(TagCategoryRead(slug=c.slug, label=c.label, tag_count=len(c.tags)))
+        out.append(TagCategoryRead(slug=c.slug, label=c.label, color=getattr(c, "color", None), tag_count=len(c.tags)))
     return out
 
 
@@ -32,8 +32,8 @@ async def create_category(data: TagCategoryCreate, db: AsyncSession = Depends(ge
     existing = await tag_service.get_tag_category(db, data.slug)
     if existing:
         raise HTTPException(409, detail=f"La catégorie '{data.slug}' existe déjà")
-    cat = await tag_service.create_tag_category(db, data.slug, data.label)
-    return TagCategoryRead(slug=cat.slug, label=cat.label, tag_count=0)
+    cat = await tag_service.create_tag_category(db, data.slug, data.label, color=data.color)
+    return TagCategoryRead(slug=cat.slug, label=cat.label, color=getattr(cat, "color", None), tag_count=0)
 
 
 @router.delete("/categories/{slug}", status_code=204)

@@ -10,6 +10,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.media import DEFAULT_TAG_CATEGORIES, Tag, TagCategoryModel
 
 
+def _normalize_hex_color(color: str | None) -> str | None:
+    if color is None:
+        return None
+    color = color.strip()
+    if not color:
+        return None
+    if len(color) == 7 and color.startswith("#") and all(c in "0123456789abcdefABCDEF" for c in color[1:]):
+        return color.lower()
+    raise ValueError("Invalid color")
+
+
 # ---------------------------------------------------------------------------
 # Tag Category CRUD
 # ---------------------------------------------------------------------------
@@ -27,12 +38,27 @@ async def get_tag_category(db: AsyncSession, slug: str) -> TagCategoryModel | No
     return result.scalar_one_or_none()
 
 
-async def create_tag_category(db: AsyncSession, slug: str, label: str) -> TagCategoryModel:
+async def create_tag_category(db: AsyncSession, slug: str, label: str, color: str | None = None) -> TagCategoryModel:
     """Create a new tag category."""
-    cat = TagCategoryModel(slug=slug, label=label)
+    cat = TagCategoryModel(slug=slug, label=label, color=_normalize_hex_color(color))
     db.add(cat)
     await db.flush()
     return cat
+
+
+async def upsert_tag_category(
+    db: AsyncSession,
+    slug: str,
+    label: str,
+    color: str | None = None,
+) -> TagCategoryModel:
+    existing = await get_tag_category(db, slug)
+    if existing:
+        existing.label = label
+        existing.color = _normalize_hex_color(color)
+        await db.flush()
+        return existing
+    return await create_tag_category(db, slug, label, color=color)
 
 
 async def get_or_create_tag_category(db: AsyncSession, slug: str, label: str) -> TagCategoryModel:
@@ -57,6 +83,12 @@ async def get_cat_labels(db: AsyncSession) -> dict[str, str]:
     """Return a slug→label mapping for all categories."""
     cats = await list_tag_categories(db)
     return {c.slug: c.label for c in cats}
+
+
+async def get_cat_colors(db: AsyncSession) -> dict[str, str]:
+    """Return a slug→color mapping for all categories with a configured color."""
+    cats = await list_tag_categories(db)
+    return {c.slug: c.color for c in cats if getattr(c, "color", None)}
 
 
 # ---------------------------------------------------------------------------
@@ -121,7 +153,15 @@ async def list_categories(db: AsyncSession) -> dict[str, list[str]]:
 
 
 async def seed_default_tags(db: AsyncSession) -> None:
-    """Seed default tag categories and tags for first run."""
+    """Seed default tag categories and tags on first run only.
+
+    If any tag category already exists in the DB we skip seeding entirely,
+    so that user deletions are preserved across restarts.
+    """
+    existing = await list_tag_categories(db)
+    if existing:
+        return
+
     # Seed categories
     for slug, label in DEFAULT_TAG_CATEGORIES.items():
         await get_or_create_tag_category(db, slug, label)

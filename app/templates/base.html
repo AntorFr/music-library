@@ -139,9 +139,415 @@
       showToast('Erreur: ' + (e.detail.xhr.statusText || 'Requête échouée'), 'error');
     });
 
+    // --- Tag picker (HA-like combo box) ---
+    if (!window.__mlTagPickerOutsideInstalled) {
+      window.__mlTagPickerOutsideInstalled = true;
+      document.addEventListener('click', (e) => {
+        const openPickers = document.querySelectorAll('[data-tag-picker][data-open="1"]');
+        for (const picker of openPickers) {
+          if (!picker.contains(e.target)) {
+            const menu = picker.querySelector('[data-tag-picker-menu]');
+            if (menu) {
+              menu.hidden = true;
+              menu.style.display = 'none';
+            }
+            const input = picker.querySelector('[data-tag-picker-input]');
+            if (input) input.blur();
+            picker.dataset.open = '0';
+          }
+        }
+      }, { capture: true });
+    }
+
+    function initTagPickers(root = document) {
+      const pickers = root.querySelectorAll('[data-tag-picker]');
+      for (const picker of pickers) {
+        if (picker.dataset.initialized === '1') continue;
+        picker.dataset.initialized = '1';
+        picker.dataset.open = '0';
+
+        const input = picker.querySelector('[data-tag-picker-input]');
+        const menu = picker.querySelector('[data-tag-picker-menu]');
+        const optionsScript = picker.querySelector('script[data-tag-picker-options]');
+        const colorsScript = picker.querySelector('script[data-tag-picker-color-map]');
+        const form = picker.closest('form');
+        const postUrl = picker.dataset.postUrl || form?.getAttribute('hx-post') || form?.action || '';
+        if (!input || !menu || !form) continue;
+
+        // Ensure closed means truly invisible.
+        menu.hidden = true;
+        menu.style.display = 'none';
+
+        let options = [];
+        try {
+          options = JSON.parse(optionsScript?.textContent || '[]') || [];
+        } catch (e) {
+          options = [];
+        }
+
+        let colorByLabel = {};
+        try {
+          colorByLabel = JSON.parse(colorsScript?.textContent || '{}') || {};
+        } catch (e) {
+          colorByLabel = {};
+        }
+
+        let activeIndex = -1;
+        let currentButtons = [];
+
+        function closeMenu() {
+          menu.hidden = true;
+          menu.style.display = 'none';
+          picker.dataset.open = '0';
+          activeIndex = -1;
+        }
+
+        function openMenu() {
+          if (menu.childElementCount === 0) return;
+          menu.hidden = false;
+          menu.style.display = 'flex';
+          picker.dataset.open = '1';
+        }
+
+        function setActive(idx) {
+          activeIndex = idx;
+          currentButtons.forEach((btn, i) => {
+            if (i === activeIndex) btn.classList.add('active');
+            else btn.classList.remove('active');
+          });
+          if (activeIndex >= 0 && currentButtons[activeIndex]) {
+            currentButtons[activeIndex].scrollIntoView({ block: 'nearest' });
+          }
+        }
+
+        function render(filterText) {
+          const q = (filterText || '').trim().toLowerCase();
+          const filtered = q
+            ? options.filter(o => String(o).toLowerCase().includes(q))
+            : options;
+
+          // cap to keep DOM small
+          const limited = q ? filtered.slice(0, 30) : filtered.slice(0, 15);
+
+          menu.innerHTML = '';
+          currentButtons = [];
+
+          if (limited.length === 0) {
+            if (!q) {
+              closeMenu();
+              return;
+            }
+            const empty = document.createElement('div');
+            empty.className = 'tag-picker-empty';
+            empty.textContent = 'Aucun résultat';
+            menu.appendChild(empty);
+            setActive(-1);
+            openMenu();
+            return;
+          }
+
+          for (const opt of limited) {
+            const str = String(opt);
+            const parts = str.split(':', 2);
+            const cat = parts.length > 1 ? parts[0].trim() : '';
+            const val = parts.length > 1 ? str.slice(str.indexOf(':') + 1).trim() : str;
+            const iconColor = cat && colorByLabel[cat] ? String(colorByLabel[cat]) : '';
+            const icon = iconColor
+              ? `<i class="mdi mdi-tag" style="color:${iconColor};"></i>`
+              : `<i class="mdi mdi-tag"></i>`;
+
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'tag-picker-item';
+            btn.innerHTML = cat
+              ? `<span class="tag-chip tag-picker-chip">${icon}<span class="text-muted text-sm">${cat}:</span>${val}</span>`
+              : `<span class="tag-chip tag-picker-chip">${icon}${val}</span>`;
+
+            btn.addEventListener('click', async (e) => {
+              e.preventDefault();
+              if (!postUrl) return;
+
+              // Remove locally so the list updates immediately.
+              const removed = str;
+              options = options.filter(o => String(o) !== removed);
+
+              try {
+                const body = new URLSearchParams();
+                body.set('tag', removed);
+
+                const resp = await fetch(postUrl, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+                    'HX-Request': 'true',
+                    'HX-Target': 'media-tags'
+                  },
+                  body
+                });
+
+                if (resp.ok) {
+                  const html = await resp.text();
+                  const cur = document.querySelector('#media-tags');
+                  if (cur) {
+                    cur.outerHTML = html;
+                    if (window.htmx && window.htmx.process) window.htmx.process(document.body);
+                  }
+                } else {
+                  // Put it back if server rejects.
+                  options.push(removed);
+                }
+              } catch (err) {
+                options.push(removed);
+              }
+
+              // Keep focus + menu open for multi-add.
+              if (picker.dataset.open === '1') {
+                input.focus();
+                render(input.value);
+              }
+            });
+            menu.appendChild(btn);
+            currentButtons.push(btn);
+          }
+
+          setActive(-1);
+          openMenu();
+        }
+
+        input.addEventListener('focus', () => {
+          render(input.value);
+        });
+
+        input.addEventListener('click', () => {
+          render(input.value);
+        });
+
+        input.addEventListener('input', () => {
+          render(input.value);
+        });
+
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') {
+            closeMenu();
+            return;
+          }
+          if (menu.hidden) return;
+
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            const next = Math.min(currentButtons.length - 1, activeIndex + 1);
+            setActive(next);
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            const next = Math.max(0, activeIndex - 1);
+            setActive(next);
+          } else if (e.key === 'Enter') {
+            // Never submit the form when the menu is open.
+            e.preventDefault();
+            if (activeIndex >= 0 && currentButtons[activeIndex]) currentButtons[activeIndex].click();
+          }
+        });
+
+      }
+    }
+
+    // --- RFID picker (same UX as tags) ---
+    if (!window.__mlRfidPickerOutsideInstalled) {
+      window.__mlRfidPickerOutsideInstalled = true;
+      document.addEventListener('click', (e) => {
+        const openPickers = document.querySelectorAll('[data-rfid-picker][data-open="1"]');
+        for (const picker of openPickers) {
+          if (!picker.contains(e.target)) {
+            const menu = picker.querySelector('[data-rfid-picker-menu]');
+            if (menu) {
+              menu.hidden = true;
+              menu.style.display = 'none';
+            }
+            const input = picker.querySelector('[data-rfid-picker-input]');
+            if (input) input.blur();
+            picker.dataset.open = '0';
+          }
+        }
+      }, { capture: true });
+    }
+
+    function initRfidPickers(root = document) {
+      const pickers = root.querySelectorAll('[data-rfid-picker]');
+      for (const picker of pickers) {
+        if (picker.dataset.initialized === '1') continue;
+        picker.dataset.initialized = '1';
+        picker.dataset.open = '0';
+
+        const input = picker.querySelector('[data-rfid-picker-input]');
+        const menu = picker.querySelector('[data-rfid-picker-menu]');
+        const optionsScript = picker.querySelector('script[data-rfid-picker-options]');
+        const form = picker.closest('form');
+        const postUrl = picker.dataset.postUrl || form?.action || '';
+        if (!input || !menu || !form) continue;
+
+        menu.hidden = true;
+        menu.style.display = 'none';
+
+        let options = [];
+        try {
+          options = JSON.parse(optionsScript?.textContent || '[]') || [];
+        } catch (e) {
+          options = [];
+        }
+
+        let activeIndex = -1;
+        let currentButtons = [];
+
+        function closeMenu() {
+          menu.hidden = true;
+          menu.style.display = 'none';
+          picker.dataset.open = '0';
+          activeIndex = -1;
+        }
+
+        function openMenu() {
+          if (menu.childElementCount === 0) return;
+          menu.hidden = false;
+          menu.style.display = 'flex';
+          picker.dataset.open = '1';
+        }
+
+        function setActive(idx) {
+          activeIndex = idx;
+          currentButtons.forEach((btn, i) => {
+            if (i === activeIndex) btn.classList.add('active');
+            else btn.classList.remove('active');
+          });
+          if (activeIndex >= 0 && currentButtons[activeIndex]) {
+            currentButtons[activeIndex].scrollIntoView({ block: 'nearest' });
+          }
+        }
+
+        function matches(opt, q) {
+          const name = String(opt?.name || '').toLowerCase();
+          const uid = String(opt?.uid || '').toLowerCase();
+          return name.includes(q) || uid.includes(q);
+        }
+
+        function render(filterText) {
+          const q = (filterText || '').trim().toLowerCase();
+          const filtered = q ? options.filter(o => matches(o, q)) : options;
+          const limited = q ? filtered.slice(0, 30) : filtered.slice(0, 15);
+
+          menu.innerHTML = '';
+          currentButtons = [];
+
+          if (limited.length === 0) {
+            if (!q) {
+              closeMenu();
+              return;
+            }
+            const empty = document.createElement('div');
+            empty.className = 'tag-picker-empty';
+            empty.textContent = 'Aucun résultat';
+            menu.appendChild(empty);
+            setActive(-1);
+            openMenu();
+            return;
+          }
+
+          for (const opt of limited) {
+            const uid = String(opt?.uid || '');
+            const name = String(opt?.name || uid);
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'tag-picker-item';
+            btn.innerHTML = `
+              <span class="tag-chip tag-picker-chip rfid-picker-chip">
+                <i class="mdi mdi-nfc"></i>
+                ${name}
+                <span class="rfid-picker-uid">${uid}</span>
+              </span>
+            `;
+
+            btn.addEventListener('click', async (e) => {
+              e.preventDefault();
+              if (!postUrl || !uid) return;
+
+              options = options.filter(o => String(o?.uid || '') !== uid);
+
+              try {
+                const body = new URLSearchParams();
+                body.set('rfid_uids', uid);
+                const resp = await fetch(postUrl, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+                    'HX-Request': 'true',
+                    'HX-Target': 'rfid-assigned'
+                  },
+                  body
+                });
+                if (resp.ok) {
+                  const html = await resp.text();
+                  const cur = document.querySelector('#rfid-assigned');
+                  if (cur) {
+                    cur.outerHTML = html;
+                    if (window.htmx && window.htmx.process) window.htmx.process(document.body);
+                  }
+                } else {
+                  options.push(opt);
+                }
+              } catch (err) {
+                options.push(opt);
+              }
+
+              if (picker.dataset.open === '1') {
+                input.focus();
+                render(input.value);
+              }
+            });
+
+            menu.appendChild(btn);
+            currentButtons.push(btn);
+          }
+
+          setActive(-1);
+          openMenu();
+        }
+
+        input.addEventListener('focus', () => render(input.value));
+        input.addEventListener('click', () => render(input.value));
+        input.addEventListener('input', () => render(input.value));
+
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') {
+            closeMenu();
+            return;
+          }
+          if (menu.hidden) return;
+
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            const next = Math.min(currentButtons.length - 1, activeIndex + 1);
+            setActive(next);
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            const next = Math.max(0, activeIndex - 1);
+            setActive(next);
+          } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (activeIndex >= 0 && currentButtons[activeIndex]) currentButtons[activeIndex].click();
+          }
+        });
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      initTagPickers(document);
+      initRfidPickers(document);
+    });
+
     // Close sidebar on navigation (mobile)
     document.body.addEventListener('htmx:afterSwap', function() {
       closeSidebar();
+      initTagPickers(document);
+      initRfidPickers(document);
     });
   </script>
 

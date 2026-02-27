@@ -1,0 +1,24 @@
+{# Partial: assigned RFID chips for media detail page #}
+<div class="d-flex flex-wrap gap-1 mb-2" id="rfid-assigned">
+  {% if assigned_rfid and assigned_rfid|length > 0 %}
+    {% for t in assigned_rfid %}
+    <span class="tag-chip">
+      <i class="mdi mdi-nfc"></i>
+      {{ t.name }}
+      <span class="text-muted" style="margin-left:.35rem;font-family:monospace;font-size:.8rem;">{{ t.uid }}</span>
+      <form method="POST"
+            action="/media/{{ item.id }}/rfid/{{ t.uid }}/remove"
+            style="display:inline;"
+            hx-post="/media/{{ item.id }}/rfid/{{ t.uid }}/remove"
+            hx-target="#rfid-assigned"
+            hx-swap="outerHTML">
+        <button type="submit" class="remove-tag" title="Retirer">
+          <i class="mdi mdi-close"></i>
+        </button>
+      </form>
+    </span>
+    {% endfor %}
+  {% else %}
+    <span class="text-muted text-sm">Aucun tag RFID associé.</span>
+  {% endif %}
+</div>

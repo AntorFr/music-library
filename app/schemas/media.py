@@ -18,11 +18,13 @@ from app.models.media import MediaType
 class TagCategoryCreate(BaseModel):
     slug: str = Field(..., min_length=1, max_length=50, pattern=r'^[a-z][a-z0-9_]*$')
     label: str = Field(..., min_length=1, max_length=100)
+    color: str | None = Field(None, pattern=r'^#[0-9A-Fa-f]{6}$')
 
 
 class TagCategoryRead(BaseModel):
     slug: str
     label: str
+    color: str | None = None
     tag_count: int = 0
 
     model_config = {"from_attributes": True}

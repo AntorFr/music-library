@@ -132,6 +132,7 @@ class TagCategoryModel(Base):
 
     slug: Mapped[str] = mapped_column(String(50), primary_key=True)
     label: Mapped[str] = mapped_column(String(100), nullable=False)
+    color: Mapped[str | None] = mapped_column(String(7), nullable=True)
 
     # Relationships
     tags: Mapped[list["Tag"]] = relationship("Tag", back_populates="category_rel", lazy="selectin")

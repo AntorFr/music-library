@@ -23,6 +23,7 @@ from app.schemas.media import (
 )
 from app.services import cover_service
 from app.services.select_engine import apply_fallback, evaluate_group
+from app.services.select_engine import normalize_select_token
 
 
 class DuplicateMediaError(RuntimeError):
@@ -377,7 +378,11 @@ async def select_media(db: AsyncSession, params: MediaSelectParams) -> list[Medi
 def _media_tag_index(media: Media) -> dict[str, set[str]]:
     idx: dict[str, set[str]] = {}
     for t in getattr(media, "tags", []) or []:
-        idx.setdefault(t.category, set()).add(t.value)
+        category = (t.category or "").strip().casefold()
+        value = normalize_select_token(t.value or "")
+        if not category or not value:
+            continue
+        idx.setdefault(category, set()).add(value)
     return idx
 
 

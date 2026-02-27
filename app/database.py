@@ -38,3 +38,10 @@ async def init_db() -> None:
         from app.models import media as _media_models  # noqa: F401
         from app.models import rfid as _rfid_models  # noqa: F401
         await conn.run_sync(Base.metadata.create_all)
+
+        # Lightweight schema upgrades for SQLite (create_all does not add columns).
+        if conn.dialect.name == "sqlite":
+            res = await conn.exec_driver_sql("PRAGMA table_info(tag_categories)")
+            cols = {row[1] for row in res.fetchall()}  # row[1] = column name
+            if "color" not in cols:
+                await conn.exec_driver_sql("ALTER TABLE tag_categories ADD COLUMN color VARCHAR(7)")

@@ -3,28 +3,30 @@
   {% include "components/media_tags.html" %}
 
   <form class="d-flex flex-wrap gap-1 align-center mb-2"
+        method="POST"
+        action="/media/{{ item.id }}/tags"
         hx-post="/media/{{ item.id }}/tags"
-        hx-target="#media-tags-block"
-        hx-swap="outerHTML"
-        hx-on::after-request="this.reset()">
-    <input type="search"
-           name="tag"
-           class="form-control form-control-sm"
-           style="min-width:320px;max-width:520px;padding:6px 10px;font-size:0.85rem;"
-           placeholder="Ajouter une étiquette…"
-           list="available-tags-{{ item.id }}"
-           autocomplete="off"
-           required>
+        hx-target="#media-tags"
+        hx-swap="outerHTML">
+    <div class="tag-picker" data-tag-picker data-post-url="/media/{{ item.id }}/tags">
+      <input type="search"
+             name="tag"
+             class="form-control form-control-sm"
+             style="width:100%;min-width:320px;max-width:680px;padding:6px 10px;font-size:0.85rem;"
+             placeholder="Ajouter une étiquette…"
+             autocomplete="off"
+             data-tag-picker-input
+             aria-label="Ajouter une étiquette"
+             {% if not available_tag_options or available_tag_options|length == 0 %}disabled{% endif %}>
 
-    <datalist id="available-tags-{{ item.id }}">
-      {% for t in available_tag_options %}
-      <option value="{{ t }}"></option>
-      {% endfor %}
-    </datalist>
-
-    <button type="submit" class="btn btn-primary btn-sm" style="padding:6px 12px;font-size:0.85rem;">
-      <i class="mdi mdi-tag-plus"></i> Ajouter
-    </button>
+      <div class="tag-picker-menu" data-tag-picker-menu hidden></div>
+      <script type="application/json" data-tag-picker-options>{{ available_tag_options | tojson }}</script>
+      <script type="application/json" data-tag-picker-color-map>{
+        {% for slug, label in cat_labels.items() if cat_colors.get(slug) %}
+        {{ label | tojson }}: {{ cat_colors.get(slug) | tojson }}{% if not loop.last %},{% endif %}
+        {% endfor %}
+      }</script>
+    </div>
   </form>
 
   {% if not available_tag_options or available_tag_options|length == 0 %}

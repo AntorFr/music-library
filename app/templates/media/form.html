@@ -86,7 +86,7 @@
         {% if item and item.tags %}
           {% for tag in item.tags %}
           <span class="tag-chip" data-tag-id="{{ tag.id if tag.id is defined else '' }}">
-            <i class="mdi mdi-tag"></i>
+            <i class="mdi mdi-tag" style="color: {{ cat_colors.get(tag.category, 'var(--primary)') }};"></i>
             {{ cat_labels.get(tag.category, tag.category) }}:{{ tag.value | capitalize }}
             <input type="hidden" name="tag_ids" value="{{ tag.id if tag.id is defined else '' }}">
             <span class="remove-tag" onclick="this.parentElement.remove()">
@@ -100,7 +100,9 @@
         <select id="tagSelect" class="form-control" style="max-width: 350px;">
           <option value="">— Sélectionner un tag —</option>
           {% for tag in available_tags %}
-          <option value="{{ tag.id }}" data-label="{{ cat_labels.get(tag.category, tag.category) }}:{{ tag.value | capitalize }}">
+          <option value="{{ tag.id }}"
+                  data-label="{{ cat_labels.get(tag.category, tag.category) }}:{{ tag.value | capitalize }}"
+                  data-color="{{ cat_colors.get(tag.category, '') }}">
             {{ cat_labels.get(tag.category, tag.category) }}:{{ tag.value | capitalize }}
           </option>
           {% endfor %}
@@ -139,8 +141,9 @@ function addTag() {
 
   const chip = document.createElement('span');
   chip.className = 'tag-chip';
+  const iconColor = opt.dataset.color || 'var(--primary)';
   chip.innerHTML = `
-    <i class="mdi mdi-tag"></i>
+    <i class="mdi mdi-tag" style="color:${iconColor};"></i>
     ${opt.dataset.label}
     <input type="hidden" name="tag_ids" value="${opt.value}">
     <span class="remove-tag" onclick="this.parentElement.remove()">
