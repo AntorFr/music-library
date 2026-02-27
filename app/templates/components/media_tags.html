@@ -7,7 +7,7 @@
       <span class="text-muted text-sm">{{ cat_labels.get(tag.category, tag.category) }}:</span>{{ tag.value | capitalize }}
       <button class="tag-remove-btn"
               hx-delete="/media/{{ item.id }}/tags/{{ tag.id }}"
-              hx-target="#media-tags"
+              hx-target="#media-tags-block"
               hx-swap="outerHTML"
               title="Retirer ce tag">
         <i class="mdi mdi-close"></i>

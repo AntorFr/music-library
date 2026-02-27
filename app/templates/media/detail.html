@@ -48,7 +48,7 @@
     </div>
 
     <!-- Tags -->
-    {% include "components/media_tags.html" %}
+    {% include "components/media_tags_block.html" %}
 
     <!-- RFID tags -->
     <div class="card mt-3" id="rfid-card">
@@ -96,30 +96,6 @@
         {% endif %}
       </div>
     </div>
-
-    <!-- Add tag inline -->
-    <form class="d-flex flex-wrap gap-1 align-center mb-2"
-          hx-post="/media/{{ item.id }}/tags"
-          hx-target="#media-tags"
-          hx-swap="outerHTML"
-          hx-on::after-request="this.querySelector('[name=value]').value=''">
-      <select name="category" class="form-control form-control-sm"
-              style="min-width:160px;padding:6px 10px;font-size:0.85rem;"
-              onchange="updateTagValues(this)" required>
-        <option value="">Catégorie…</option>
-        {% for cat_slug, cat_values in tags_by_cat.items() %}
-        <option value="{{ cat_slug }}">{{ cat_labels.get(cat_slug, cat_slug) }}</option>
-        {% endfor %}
-      </select>
-      <select name="value" class="form-control form-control-sm"
-              style="min-width:180px;padding:6px 10px;font-size:0.85rem;"
-              required disabled>
-        <option value="">Valeur…</option>
-      </select>
-      <button type="submit" class="btn btn-primary btn-sm" style="padding:6px 12px;font-size:0.85rem;">
-        <i class="mdi mdi-tag-plus"></i> Ajouter
-      </button>
-    </form>
 
     <div class="detail-actions">
       {% if players %}
@@ -188,37 +164,6 @@
 
 {% block scripts %}
 <script>
-// Tag values per category (for cascading select)
-const TAG_VALUES = {{ tags_by_cat | tojson }};
-
-function updateTagValues(catSelect) {
-  const form = catSelect.closest('form');
-  const valSelect = form.querySelector('[name=value]');
-  const cat = catSelect.value;
-
-  // Clear + populate
-  valSelect.innerHTML = '<option value="">Valeur…</option>';
-  if (cat && TAG_VALUES[cat]) {
-    TAG_VALUES[cat].sort().forEach(v => {
-      // Skip tags already on this media
-      const existing = document.querySelectorAll('#media-tags .tag-chip');
-      const alreadyUsed = Array.from(existing).some(chip => {
-        const text = chip.textContent.trim();
-        return text.includes(cat + ':') && text.includes(v);
-      });
-      if (!alreadyUsed) {
-        const opt = document.createElement('option');
-        opt.value = v;
-        opt.textContent = v;
-        valSelect.appendChild(opt);
-      }
-    });
-    valSelect.disabled = false;
-  } else {
-    valSelect.disabled = true;
-  }
-}
-
 async function playMedia() {
   const queueId = document.getElementById('playerSelect').value;
   const uri = '{{ item.source_uri }}';

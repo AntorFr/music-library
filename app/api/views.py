@@ -67,6 +67,49 @@ def _base_ctx(request: Request, **extra: Any) -> dict:
     }
 
 
+def _build_available_tag_options(
+    *,
+    item: Any,
+    all_tags: list[Any],
+    cat_labels: dict[str, str],
+) -> list[str]:
+    existing = {(t.category, t.value) for t in (getattr(item, "tags", []) or [])}
+    options: list[str] = []
+    for t in all_tags:
+        if (t.category, t.value) in existing:
+            continue
+        cat_label = cat_labels.get(t.category, t.category)
+        options.append(f"{cat_label}: {t.value}")
+    return sorted(set(options), key=str.casefold)
+
+
+def _parse_tag_input(
+    *,
+    raw: str,
+    cat_labels: dict[str, str],
+) -> tuple[str, str]:
+    """Parse a single tag input like '<Category>: <value>'.
+
+    Accepts either a category slug or its label (case-insensitive).
+    """
+    raw = (raw or "").strip()
+    if not raw:
+        raise HTTPException(400, detail="Tag invalide")
+
+    if ":" not in raw:
+        raise HTTPException(400, detail="Format attendu: 'Catégorie: valeur'")
+
+    left, right = raw.split(":", 1)
+    cat_token = left.strip()
+    value = right.strip()
+    if not cat_token or not value:
+        raise HTTPException(400, detail="Format attendu: 'Catégorie: valeur'")
+
+    label_to_slug = {lbl.casefold(): slug for slug, lbl in cat_labels.items()}
+    slug = label_to_slug.get(cat_token.casefold(), cat_token)
+    return slug, value
+
+
 # ---------------------------------------------------------------------------
 # RFID tags
 # ---------------------------------------------------------------------------
@@ -280,13 +323,15 @@ async def media_detail(request: Request, media_id: str, db: AsyncSession = Depen
     except Exception:
         pass
 
-    # Tags grouped by category for inline add
+    # Tags for unified add picker
     categories = await list_tag_categories(db)
     all_tags = await list_tags(db)
-    tags_by_cat: dict[str, list[str]] = {}
-    for t in all_tags:
-        tags_by_cat.setdefault(t.category, []).append(t.value)
     cat_labels = {c.slug: c.label for c in categories}
+    available_tag_options = _build_available_tag_options(
+        item=item,
+        all_tags=all_tags,
+        cat_labels=cat_labels,
+    )
 
     # RFID tags (assigned + available)
     assigned_rfid = [
@@ -302,8 +347,8 @@ async def media_detail(request: Request, media_id: str, db: AsyncSession = Depen
         request,
         item=item,
         players=players,
-        tags_by_cat=tags_by_cat,
         cat_labels=cat_labels,
+        available_tag_options=available_tag_options,
         assigned_rfid=assigned_rfid,
         available_rfid=available_rfid,
     ))
@@ -338,20 +383,35 @@ async def media_unassign_rfid(
 async def media_add_tag(
     request: Request,
     media_id: str,
-    category: str = Form(...),
-    value: str = Form(...),
+    tag: str | None = Form(None),
+    category: str | None = Form(None),
+    value: str | None = Form(None),
     db: AsyncSession = Depends(get_db),
 ):
-    """Add a tag to a media item and return the updated tags partial."""
+    """Add a tag to a media item and return the updated tags block partial."""
+    cat_labels = {c.slug: c.label for c in await list_tag_categories(db)}
+
+    if tag:
+        category, value = _parse_tag_input(raw=tag, cat_labels=cat_labels)
+    if not category or not value:
+        raise HTTPException(400, detail="Tag invalide")
+
     item = await media_service.add_tag_to_media(db, media_id, category, value)
     if not item:
         raise HTTPException(404, detail="Média introuvable")
     await db.commit()
-    cat_labels = {c.slug: c.label for c in await list_tag_categories(db)}
-    return templates.TemplateResponse("components/media_tags.html", {
+
+    all_tags = await list_tags(db)
+    available_tag_options = _build_available_tag_options(
+        item=item,
+        all_tags=all_tags,
+        cat_labels=cat_labels,
+    )
+    return templates.TemplateResponse("components/media_tags_block.html", {
         "request": request,
         "item": item,
         "cat_labels": cat_labels,
+        "available_tag_options": available_tag_options,
     })
 
 
@@ -362,16 +422,23 @@ async def media_remove_tag(
     tag_id: int,
     db: AsyncSession = Depends(get_db),
 ):
-    """Remove a tag from a media item and return the updated tags partial."""
+    """Remove a tag from a media item and return the updated tags block partial."""
     item = await media_service.remove_tag_from_media(db, media_id, tag_id)
     if not item:
         raise HTTPException(404, detail="Média introuvable")
     await db.commit()
     cat_labels = {c.slug: c.label for c in await list_tag_categories(db)}
-    return templates.TemplateResponse("components/media_tags.html", {
+    all_tags = await list_tags(db)
+    available_tag_options = _build_available_tag_options(
+        item=item,
+        all_tags=all_tags,
+        cat_labels=cat_labels,
+    )
+    return templates.TemplateResponse("components/media_tags_block.html", {
         "request": request,
         "item": item,
         "cat_labels": cat_labels,
+        "available_tag_options": available_tag_options,
     })
 
 

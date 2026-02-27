@@ -1,0 +1,35 @@
+{# Partial: media tags + unified add-tag picker (HA-like) for media detail page #}
+<div id="media-tags-block">
+  {% include "components/media_tags.html" %}
+
+  <form class="d-flex flex-wrap gap-1 align-center mb-2"
+        hx-post="/media/{{ item.id }}/tags"
+        hx-target="#media-tags-block"
+        hx-swap="outerHTML"
+        hx-on::after-request="this.reset()">
+    <input type="search"
+           name="tag"
+           class="form-control form-control-sm"
+           style="min-width:320px;max-width:520px;padding:6px 10px;font-size:0.85rem;"
+           placeholder="Ajouter une étiquette…"
+           list="available-tags-{{ item.id }}"
+           autocomplete="off"
+           required>
+
+    <datalist id="available-tags-{{ item.id }}">
+      {% for t in available_tag_options %}
+      <option value="{{ t }}"></option>
+      {% endfor %}
+    </datalist>
+
+    <button type="submit" class="btn btn-primary btn-sm" style="padding:6px 12px;font-size:0.85rem;">
+      <i class="mdi mdi-tag-plus"></i> Ajouter
+    </button>
+  </form>
+
+  {% if not available_tag_options or available_tag_options|length == 0 %}
+  <div class="text-muted text-sm" style="margin-top:-6px;margin-bottom:10px;">
+    Tous les tags existants sont déjà appliqués.
+  </div>
+  {% endif %}
+</div>
