@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import enum
 from datetime import datetime
 
 from pydantic import BaseModel, Field
+from pydantic import field_validator
 
 from app.models.media import MediaType
 
@@ -105,6 +107,12 @@ class MediaRead(MediaBase):
     model_config = {"from_attributes": True}
 
 
+class MediaSelectRead(MediaRead):
+    """Selection result for HA: includes a stable resolved cover URL."""
+
+    cover_url_resolved: str
+
+
 class MediaBrief(BaseModel):
     """Compact representation for lists / selection results."""
     id: str
@@ -134,6 +142,91 @@ class MediaSelectParams(BaseModel):
     provider: str | None = None
     random: bool = False
     limit: int = Field(10, ge=1, le=100)
+
+
+class SelectionFallback(str, enum.Enum):
+    """Fallback mode when strict selection returns 0 items."""
+
+    none = "none"
+    soft = "soft"
+    aggressive = "aggressive"
+
+
+class TagFilter(BaseModel):
+    """Tag filter for a single category.
+
+    Semantics: values are OR within a category.
+    """
+
+    category: str = Field(..., min_length=1, max_length=50)
+    values: list[str] = Field(default_factory=list)
+
+    @field_validator("values", mode="before")
+    @classmethod
+    def _coerce_values(cls, v):
+        # Accept either list[str] or CSV string.
+        if v is None:
+            return []
+        if isinstance(v, str):
+            return [p.strip() for p in v.split(",") if p.strip()]
+        if isinstance(v, list):
+            out: list[str] = []
+            for item in v:
+                if item is None:
+                    continue
+                if isinstance(item, str):
+                    out.extend([p.strip() for p in item.split(",") if p.strip()])
+                else:
+                    out.append(str(item))
+            return out
+        return v
+
+
+class TagQueryGroup(BaseModel):
+    """Recursive boolean query over tags.
+
+    - all_of: AND across categories
+    - none_of: NOT (exclusion), exclusion is always strict
+    - any_of: OR across nested groups
+    """
+
+    all_of: list[TagFilter] = Field(default_factory=list)
+    any_of: list["TagQueryGroup"] = Field(default_factory=list)
+    none_of: list[TagFilter] = Field(default_factory=list)
+
+
+class MediaSelectQueryOptions(BaseModel):
+    """Options for selection, used by HA integrations."""
+
+    limit: int = Field(10, ge=1, le=100)
+    random: bool = False
+    fallback: SelectionFallback = SelectionFallback.none
+    exclude_ids: list[str] = Field(default_factory=list, description="UUIDs à exclure")
+
+    # Strict filters (never relaxed by fallback)
+    media_type: MediaType | None = None
+    provider: str | None = None
+
+    @field_validator("exclude_ids", mode="before")
+    @classmethod
+    def _coerce_exclude_ids(cls, v):
+        # Accept list[str] or CSV string.
+        if v is None:
+            return []
+        if isinstance(v, str):
+            return [p.strip() for p in v.split(",") if p.strip()]
+        return v
+
+
+class MediaSelectQueryRequest(BaseModel):
+    """POST payload for complex selection queries."""
+
+    query: TagQueryGroup
+    options: MediaSelectQueryOptions = Field(default_factory=MediaSelectQueryOptions)
+
+
+# Resolve recursive model references
+TagQueryGroup.model_rebuild()
 
 
 # ---------------------------------------------------------------------------

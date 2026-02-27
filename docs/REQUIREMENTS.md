@@ -108,11 +108,56 @@ GET /api/v1/media/select
   &limit=1
 ```
 
+Extensions (compat HA) :
+```
+GET /api/v1/media/select
+  ?tag_style=rock,pop
+  &not_tag_style=metal
+  &exclude_ids=<uuid1>,<uuid2>
+  &fallback=soft
+  &media_type=track
+  &provider=spotify
+  &limit=3
+```
+
 Comportement :
-- Filtrage par intersection de tags (AND entre catégories)
-- Mode aléatoire (`random=true`) ou déterministe
-- Retourne les URI + infos nécessaires pour lancer la lecture
-- Format JSON exploitable par HA REST commands
+- Filtrage par tags : AND entre catégories
+- OR au sein d'une même catégorie via valeurs CSV (ex: `tag_style=rock,pop`)
+- Exclusions strictes via `not_<category>=...` et `not_tag_<slug>=...` (jamais relâchées)
+- Filtres stricts non relâchés : `media_type`, `provider`, `exclude_ids`
+- Fallback appliqué uniquement si 0 résultat strict :
+  - `fallback=none` (défaut) : retourne `[]`
+  - `fallback=aggressive` : retire des catégories (dans l'ordre inverse de déclaration) jusqu'à obtenir ≥1 résultat
+  - `fallback=soft` : sélectionne les titres matchant au moins 1 tag, puis les classe par nb de tags matchés, puis par ordre des filtres fournis
+- Retour 200 avec une liste (éventuellement vide)
+- Ajoute `cover_url_resolved` (URL stable `/covers/{id}.jpg`) pour simplifier HA/ESPHome
+
+Endpoint complexe (requêtes structurées ET/OU/NOT) :
+```
+POST /api/v1/media/select/query
+Content-Type: application/json
+
+{
+  "query": {
+    "all_of": [
+      {"category": "owner", "values": ["papa"]},
+      {"category": "mood", "values": ["calm", "focus"]}
+    ],
+    "none_of": [
+      {"category": "genre", "values": ["metal"]}
+    ],
+    "any_of": []
+  },
+  "options": {
+    "limit": 1,
+    "random": false,
+    "fallback": "soft",
+    "exclude_ids": ["<uuid>"] ,
+    "media_type": "track",
+    "provider": "spotify"
+  }
+}
+```
 
 ### 5.4 Jaquettes stables — Phase 3
 
@@ -129,6 +174,42 @@ Comportement :
 - [ ] Endpoint `/api/v1/ha/play` qui retourne le format attendu par MA
 - [ ] Exemples d'automations YAML
 - [ ] Endpoint de santé `/api/v1/health` pour monitoring
+
+Exemple `rest_command` (GET simple) :
+```yaml
+rest_command:
+  music_library_select:
+    url: "http://music-library:8000/api/v1/media/select?owner={{ owner }}&mood={{ mood }}&fallback=soft&limit=1&media_type=track"
+    method: GET
+    content_type: "application/json"
+```
+
+Exemple `rest_command` (POST structuré) :
+```yaml
+rest_command:
+  music_library_select_query:
+    url: "http://music-library:8000/api/v1/media/select/query"
+    method: POST
+    content_type: "application/json"
+    payload: >
+      {
+        "query": {
+          "all_of": [
+            {"category": "owner", "values": ["papa"]},
+            {"category": "mood", "values": ["calm","focus"]}
+          ],
+          "none_of": [
+            {"category": "genre", "values": ["metal"]}
+          ],
+          "any_of": []
+        },
+        "options": {
+          "limit": 1,
+          "fallback": "soft",
+          "media_type": "track"
+        }
+      }
+```
 
 Exemple d'automation HA :
 ```yaml
@@ -181,6 +262,7 @@ automation:
 | PUT     | `/api/v1/media/{id}`        | Modifier un média          |
 | DELETE  | `/api/v1/media/{id}`        | Supprimer (soft)           |
 | GET     | `/api/v1/media/select`      | Sélection intelligente     |
+| POST    | `/api/v1/media/select/query`| Sélection avancée (ET/OU/NOT) |
 
 ### Tags
 | Méthode | Endpoint                    | Description                |

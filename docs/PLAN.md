@@ -60,9 +60,11 @@
 
 3. **Sélection intelligente**
    - `GET /api/v1/media/select?owner=X&mood=Y&...`
-   - Logique AND entre catégories, OR au sein d'une catégorie
-   - Mode aléatoire / premier résultat
-   - Tests unitaires du sélecteur
+   - Tags dynamiques: `tag_<slug>=a,b` + exclusions `not_<cat>=...` / `not_tag_<slug>=...`
+   - `fallback=none|soft|aggressive` + `exclude_ids` (strict)
+   - `POST /api/v1/media/select/query` pour requêtes structurées ET/OU/NOT (groupes imbriqués)
+   - Réponse HA-friendly avec `cover_url_resolved`
+   - Tests unitaires du moteur de sélection (parsing + ET/OU/NOT + fallback)
 
 4. **Filtres dans l'interface**
    - Filtres HTMX par type, provider, tags
