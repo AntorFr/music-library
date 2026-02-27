@@ -218,7 +218,7 @@ async def media_create(
         description=description or None,
         tag_ids=[int(t) for t in tag_ids if t],
     )
-    item = await media_service.create_media(db, data)
+    item, _created = await media_service.create_media(db, data)
 
     # Download cover if URL provided
     if item.cover_url and not item.cover_local:
@@ -611,7 +611,7 @@ async def browse_import(
         },
     )
 
-    media = await media_service.create_media(db, data)
+    media, _created = await media_service.create_media(db, data)
 
     # Download cover
     thumb_url = ma.get_item_image_url(item, size=300)

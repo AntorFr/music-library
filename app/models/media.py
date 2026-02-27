@@ -71,6 +71,10 @@ class MediaTag(Base):
 class Media(Base):
     __tablename__ = "media"
 
+    __table_args__ = (
+        UniqueConstraint("provider", "source_uri", name="uq_media_provider_source_uri"),
+    )
+
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )

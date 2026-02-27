@@ -25,6 +25,34 @@ from app.services import cover_service
 from app.services.select_engine import apply_fallback, evaluate_group
 
 
+class DuplicateMediaError(RuntimeError):
+    """Raised when an operation would create a duplicate media entry."""
+
+    def __init__(self, provider: str, source_uri: str, existing_id: str):
+        super().__init__(f"Duplicate media for provider={provider} source_uri={source_uri}")
+        self.provider = provider
+        self.source_uri = source_uri
+        self.existing_id = existing_id
+
+
+async def _get_by_provider_source(
+    db: AsyncSession,
+    *,
+    provider: str,
+    source_uri: str,
+    exclude_id: str | None = None,
+) -> Media | None:
+    stmt = (
+        select(Media)
+        .options(selectinload(Media.tags))
+        .where(Media.provider == provider, Media.source_uri == source_uri)
+    )
+    if exclude_id:
+        stmt = stmt.where(Media.id != exclude_id)
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -70,8 +98,48 @@ async def _resolve_tags(
 # CRUD
 # ---------------------------------------------------------------------------
 
-async def create_media(db: AsyncSession, data: MediaCreate) -> Media:
-    """Create a new media item with optional tags and cover download."""
+async def create_media(db: AsyncSession, data: MediaCreate) -> tuple[Media, bool]:
+    """Create a new media item.
+
+    Duplicate control:
+    - Unicity key is (provider, source_uri)
+    - If an item already exists, returns it (created=False) instead of creating
+      a second row. This keeps the operation idempotent for HA imports.
+    """
+
+    existing = await _get_by_provider_source(
+        db, provider=data.provider, source_uri=data.source_uri
+    )
+    if existing:
+        # Reactivate if it was soft-deleted
+        if not existing.is_active:
+            existing.is_active = True
+
+        # Merge tags if provided
+        new_tags = await _resolve_tags(
+            db,
+            tag_ids=data.tag_ids,
+            tags_inline=[{"category": t.category, "value": t.value} for t in data.tags_inline],
+        )
+        if new_tags:
+            current = {(t.category, t.value) for t in (existing.tags or [])}
+            for t in new_tags:
+                if (t.category, t.value) not in current:
+                    existing.tags.append(t)
+
+        # Fill cover_url if missing
+        if not existing.cover_url and data.cover_url:
+            existing.cover_url = data.cover_url
+
+        # Ensure we have a cached cover if we can
+        if existing.cover_url and not existing.cover_local:
+            local_path = await cover_service.download_and_save_cover(existing.id, existing.cover_url)
+            if local_path:
+                existing.cover_local = local_path
+
+        await db.flush()
+        return existing, False
+
     media = Media(
         id=str(uuid.uuid4()),
         title=data.title,
@@ -102,7 +170,7 @@ async def create_media(db: AsyncSession, data: MediaCreate) -> Media:
             media.cover_local = local_path
 
     await db.flush()
-    return media
+    return media, True
 
 
 async def get_media(db: AsyncSession, media_id: str) -> Media | None:
@@ -177,6 +245,19 @@ async def update_media(db: AsyncSession, media_id: str, data: MediaUpdate) -> Me
         return None
 
     update_data = data.model_dump(exclude_unset=True)
+
+    # Prevent duplicates if provider/source_uri is being changed
+    new_provider = update_data.get("provider", media.provider)
+    new_source_uri = update_data.get("source_uri", media.source_uri)
+    if new_provider != media.provider or new_source_uri != media.source_uri:
+        dup = await _get_by_provider_source(
+            db,
+            provider=new_provider,
+            source_uri=new_source_uri,
+            exclude_id=media.id,
+        )
+        if dup:
+            raise DuplicateMediaError(new_provider, new_source_uri, dup.id)
 
     # Handle tags separately
     tag_ids = update_data.pop("tag_ids", None)

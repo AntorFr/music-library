@@ -4,6 +4,7 @@ data/
 __pycache__/
 *.pyc
 .venv/
+app/static/css/Media.ini
 *.egg-info/
 dist/
 build/

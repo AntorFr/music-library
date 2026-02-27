@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from urllib.parse import parse_qsl
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -236,9 +236,15 @@ async def get_media(media_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("", response_model=MediaRead, status_code=201)
-async def create_media(data: MediaCreate, db: AsyncSession = Depends(get_db)):
+async def create_media(
+    data: MediaCreate,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+):
     """Create a new media item."""
-    item = await media_service.create_media(db, data)
+    item, created = await media_service.create_media(db, data)
+    if not created:
+        response.status_code = 200
     return MediaRead.model_validate(item)
 
 

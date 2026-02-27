@@ -263,7 +263,7 @@ async def ma_import_item(
         },
     )
 
-    media = await media_service.create_media(db, create_data)
+    media, _created = await media_service.create_media(db, create_data)
 
     # Also try to download and cache the thumbnail locally
     thumb_url = ma.get_item_image_url(item, size=300)
