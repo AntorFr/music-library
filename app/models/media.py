@@ -113,6 +113,10 @@ class Media(Base):
         "Tag", secondary="media_tags", back_populates="media", lazy="selectin"
     )
 
+    rfid_tags: Mapped[list["RFIDTag"]] = relationship(
+        "RFIDTag", back_populates="media", lazy="selectin"
+    )
+
     def __repr__(self) -> str:
         return f"<Media {self.id[:8]} '{self.title}' ({self.media_type.value})>"
 

@@ -50,6 +50,53 @@
     <!-- Tags -->
     {% include "components/media_tags.html" %}
 
+    <!-- RFID tags -->
+    <div class="card mt-3" id="rfid-card">
+      <div class="card-body">
+        <h3 class="mb-2"><i class="mdi mdi-nfc"></i> Tags RFID</h3>
+
+        <div class="d-flex flex-wrap gap-1 mb-2" id="rfid-assigned">
+          {% if assigned_rfid and assigned_rfid|length > 0 %}
+            {% for t in assigned_rfid %}
+            <span class="tag-chip">
+              <i class="mdi mdi-nfc"></i>
+              {{ t.name }}
+              <span class="text-muted" style="margin-left:.35rem;font-family:monospace;font-size:.8rem;">{{ t.uid }}</span>
+              <form method="POST" action="/media/{{ item.id }}/rfid/{{ t.uid }}/remove" style="display:inline;">
+                <button type="submit" class="remove-tag" title="Retirer">
+                  <i class="mdi mdi-close"></i>
+                </button>
+              </form>
+            </span>
+            {% endfor %}
+          {% else %}
+            <span class="text-muted text-sm">Aucun tag RFID associé.</span>
+          {% endif %}
+        </div>
+
+        <form method="POST" action="/media/{{ item.id }}/rfid" class="d-flex gap-2 align-center" style="flex-wrap: wrap;">
+          <select name="rfid_uids" class="form-control" multiple
+                  style="min-width: 320px; max-width: 520px; padding: 8px; font-size: .9rem;">
+            {% for t in available_rfid %}
+            <option value="{{ t.uid }}">{{ t.name }} — {{ t.uid }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn btn-primary btn-sm">
+            <i class="mdi mdi-link"></i> Associer
+          </button>
+          <a href="/rfid" class="btn btn-outline btn-sm">
+            <i class="mdi mdi-pencil"></i> Gérer les tags RFID
+          </a>
+        </form>
+
+        {% if not available_rfid or available_rfid|length == 0 %}
+        <div class="text-muted text-sm mt-2">
+          Aucun tag RFID disponible (tous sont déjà associés ou aucun n'a été créé).
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
     <!-- Add tag inline -->
     <form class="d-flex flex-wrap gap-1 align-center mb-2"
           hx-post="/media/{{ item.id }}/tags"

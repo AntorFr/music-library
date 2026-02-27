@@ -36,4 +36,5 @@ async def init_db() -> None:
     async with engine.begin() as conn:
         # Import models so they register with Base.metadata
         from app.models import media as _media_models  # noqa: F401
+        from app.models import rfid as _rfid_models  # noqa: F401
         await conn.run_sync(Base.metadata.create_all)

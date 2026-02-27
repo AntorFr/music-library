@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from app.api import covers, media, music_assistant, system, tags, views
+from app.api import covers, media, music_assistant, rfid, system, tags, views
 from app.config import settings
 from app.database import init_db
 from app.services.music_assistant import close_ma_client
@@ -63,6 +63,7 @@ app.include_router(media.router)
 app.include_router(tags.router)
 app.include_router(covers.router)
 app.include_router(music_assistant.router)
+app.include_router(rfid.router)
 
 # --- Frontend (HTML) routes ---
 app.include_router(views.router)

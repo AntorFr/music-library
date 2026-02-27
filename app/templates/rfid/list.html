@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% set active_nav = "rfid" %}
+
+{% block title %}RFID — Music Library{% endblock %}
+{% block topbar_title %}Gestion des tags RFID{% endblock %}
+
+{% block content %}
+<div class="d-flex gap-3" style="align-items: flex-start; flex-wrap: wrap;">
+  <!-- RFID list -->
+  <div class="flex-1" style="min-width: 520px;">
+    <div class="filter-bar">
+      <select id="assignedFilter" onchange="filterRFID(this.value)">
+        <option value="">Tous</option>
+        <option value="unassigned">Non associés</option>
+        <option value="assigned">Associés</option>
+      </select>
+      <div class="flex-1"></div>
+      <span class="text-muted text-sm">{{ tags|length }} tag{{ 's' if tags|length != 1 else '' }}</span>
+    </div>
+
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>UID</th>
+            <th>Nom</th>
+            <th>Association</th>
+          </tr>
+        </thead>
+        <tbody id="rfidTableBody">
+          {% for t in tags %}
+          <tr data-assigned="{{ 'assigned' if t.media_id else 'unassigned' }}">
+            <td style="font-family: monospace; font-size: .85rem;">{{ t.uid }}</td>
+            <td>{{ t.name }}</td>
+            <td>
+              {% if t.media_id %}
+                <a href="/media/{{ t.media_id }}" class="badge badge-surface">
+                  <i class="mdi mdi-music"></i>
+                  {{ t.media_title or t.media_id }}
+                </a>
+              {% else %}
+                <span class="badge badge-success">
+                  <i class="mdi mdi-check-circle"></i>
+                  Disponible
+                </span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Side panel -->
+  <div style="min-width: 300px; max-width: 360px; display: flex; flex-direction: column; gap: 1rem;">
+    <div class="card">
+      <div class="card-body">
+        <h3 class="mb-3"><i class="mdi mdi-nfc"></i> Créer / renommer</h3>
+        <form method="POST" action="/rfid">
+          <div class="form-group">
+            <label class="form-label">UID *</label>
+            <input type="text" name="uid" class="form-control" required
+                   placeholder="ex: 04-70-D7-DA-B4-49-80"
+                   pattern="[0-9A-Fa-f]{2}(-[0-9A-Fa-f]{2}){3,}">
+            <div class="text-muted text-sm mt-1">Format hex avec tirets (au moins 4 octets).</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nom *</label>
+            <input type="text" name="name" class="form-control" required
+                   placeholder="ex: Carte Papa, Porte-clés Cuisine">
+          </div>
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="mdi mdi-content-save"></i> Enregistrer
+          </button>
+        </form>
+        <div class="text-muted text-sm mt-2">
+          Cette page ne gère pas l'association au catalogue (voir la page d'un média).
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filterRFID(mode) {
+  const rows = document.querySelectorAll('#rfidTableBody tr');
+  rows.forEach(row => {
+    if (!mode || row.dataset.assigned === mode) {
+      row.style.display = '';
+    } else {
+      row.style.display = 'none';
+    }
+  });
+}
+</script>
+{% endblock %}

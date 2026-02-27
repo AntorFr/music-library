@@ -20,6 +20,7 @@ from app.database import get_db
 from app.models.media import MediaType
 from app.schemas.media import MediaCreate, MediaUpdate
 from app.services import cover_service, media_service
+from app.services import rfid_service
 from app.services.tag_service import (
     create_tag,
     get_cat_labels,
@@ -64,6 +65,40 @@ def _base_ctx(request: Request, **extra: Any) -> dict:
         "type_icons": TYPE_ICONS,
         **extra,
     }
+
+
+# ---------------------------------------------------------------------------
+# RFID tags
+# ---------------------------------------------------------------------------
+
+
+@router.get("/rfid", response_class=HTMLResponse)
+async def rfid_page(request: Request, db: AsyncSession = Depends(get_db)):
+    tags = await rfid_service.list_rfid_tags(db)
+    view = [
+        {
+            "uid": t.uid,
+            "name": t.name,
+            "media_id": t.media_id,
+            "media_title": t.media.title if getattr(t, "media", None) else None,
+        }
+        for t in tags
+    ]
+    return templates.TemplateResponse(
+        "rfid/list.html",
+        _base_ctx(request, tags=view),
+    )
+
+
+@router.post("/rfid")
+async def rfid_upsert(
+    uid: str = Form(...),
+    name: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    await rfid_service.upsert_rfid_tag(db, uid=uid, name=name)
+    await db.commit()
+    return RedirectResponse("/rfid", status_code=303)
 
 
 # ---------------------------------------------------------------------------
@@ -253,13 +288,50 @@ async def media_detail(request: Request, media_id: str, db: AsyncSession = Depen
         tags_by_cat.setdefault(t.category, []).append(t.value)
     cat_labels = {c.slug: c.label for c in categories}
 
+    # RFID tags (assigned + available)
+    assigned_rfid = [
+        {"uid": t.uid, "name": t.name}
+        for t in (getattr(item, "rfid_tags", []) or [])
+    ]
+    available_rfid = [
+        {"uid": t.uid, "name": t.name}
+        for t in await rfid_service.list_rfid_tags(db, assigned=False)
+    ]
+
     return templates.TemplateResponse("media/detail.html", _base_ctx(
         request,
         item=item,
         players=players,
         tags_by_cat=tags_by_cat,
         cat_labels=cat_labels,
+        assigned_rfid=assigned_rfid,
+        available_rfid=available_rfid,
     ))
+
+
+@router.post("/media/{media_id}/rfid")
+async def media_assign_rfid(
+    media_id: str,
+    rfid_uids: list[str] = Form(default=[]),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        await rfid_service.assign_rfid_tags_to_media(db, media_id=media_id, uids=rfid_uids)
+        await db.commit()
+    except rfid_service.RFIDAlreadyAssignedError as exc:
+        raise HTTPException(409, detail=f"Tag RFID déjà associé: {exc.uid}")
+    return RedirectResponse(f"/media/{media_id}", status_code=303)
+
+
+@router.post("/media/{media_id}/rfid/{uid}/remove")
+async def media_unassign_rfid(
+    media_id: str,
+    uid: str,
+    db: AsyncSession = Depends(get_db),
+):
+    await rfid_service.unassign_rfid_tag(db, uid=uid)
+    await db.commit()
+    return RedirectResponse(f"/media/{media_id}", status_code=303)
 
 
 @router.post("/media/{media_id}/tags", response_class=HTMLResponse)
