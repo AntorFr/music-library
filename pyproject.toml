@@ -1,6 +1,6 @@
 [project]
 name = "music-library"
-version = "0.7.1-beta"
+version = "0.7.2-beta"
 description = "Family media library manager with Home Assistant & Music Assistant integration"
 requires-python = ">=3.12,<4"
 dependencies = [

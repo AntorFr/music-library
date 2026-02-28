@@ -71,6 +71,7 @@ async def list_media(
 @router.get("/select", response_model=list[MediaSelectRead])
 async def select_media(
     request: Request,
+    search: str | None = None,
     owner: str | None = None,
     mood: str | None = None,
     context: str | None = None,
@@ -113,7 +114,7 @@ async def select_media(
     pairs = parse_qsl(request.url.query, keep_blank_values=False)
     parsed = parse_tag_filters_from_qsl(
         pairs,
-        reserved_keys={"media_type", "provider", "random", "limit", "fallback", "exclude_ids"},
+        reserved_keys={"search", "media_type", "provider", "random", "limit", "fallback", "exclude_ids"},
     )
 
     # Collect exclude_ids from query (support repeated params) + explicit param
@@ -131,6 +132,7 @@ async def select_media(
         exclude_ids=sorted(excluded),
         media_type=media_type,
         provider=provider,
+        search=search,
     )
 
     items = await media_service.select_media_by_query(

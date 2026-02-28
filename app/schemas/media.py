@@ -208,6 +208,7 @@ class MediaSelectQueryOptions(BaseModel):
     # Strict filters (never relaxed by fallback)
     media_type: MediaType | None = None
     provider: str | None = None
+    search: str | None = Field(None, description="Filtre par nom (LIKE %search%)")
 
     @field_validator("exclude_ids", mode="before")
     @classmethod

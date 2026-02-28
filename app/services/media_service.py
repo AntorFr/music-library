@@ -404,6 +404,8 @@ async def select_media_by_query(
 
     stmt = select(Media).options(selectinload(Media.tags)).where(Media.is_active == True)  # noqa: E712
 
+    if options.search:
+        stmt = stmt.where(Media.title.ilike(f"%{options.search}%"))
     if options.media_type:
         stmt = stmt.where(Media.media_type == options.media_type)
     if options.provider:
