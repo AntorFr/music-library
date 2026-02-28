@@ -422,6 +422,40 @@ async def select_media_by_query(
 
     # Strict match first
     strict_indices = [i for i in range(len(items)) if evaluate_group(tags[i], group)]
+    
+    # For "force" fallback, we always try to reach limit even if we have some strict matches
+    if options.fallback == SelectionFallback.force:
+        if options.random:
+            random.shuffle(strict_indices)
+        else:
+            strict_indices.sort(
+                key=lambda i: (items[i].updated_at.timestamp() if items[i].updated_at else 0.0),
+                reverse=True,
+            )
+        
+        # If we already have enough strict matches, return them
+        if len(strict_indices) >= options.limit:
+            return [items[i] for i in strict_indices[: options.limit]]
+        
+        # Otherwise, use force fallback to complete
+        order = include_order or [f.category for f in group.all_of]
+
+        def tiebreak_force(m: Media) -> tuple:
+            ts = m.updated_at.timestamp() if m.updated_at else 0.0
+            return (-ts, m.title, m.id)
+
+        idx = apply_fallback(
+            items=items,
+            item_tags=tags,
+            group=group,
+            limit=options.limit,
+            fallback=options.fallback,
+            include_order=order,
+            passes_strict=lambda _i: True,
+            tiebreak=tiebreak_force,
+        )
+        return [items[i] for i in idx]
+
     if strict_indices:
         if options.random:
             random.shuffle(strict_indices)

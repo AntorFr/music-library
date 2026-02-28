@@ -189,7 +189,13 @@ def apply_fallback(
         return passes_strict(i) and evaluate_group(item_tags[i], g)
 
     matches = [i for i in strict_indices if evaluate_group(item_tags[i], group)]
-    if matches:
+    
+    # For force fallback, only return early if we have enough matches
+    if fallback == SelectionFallback.force:
+        if len(matches) >= limit:
+            return matches[:limit]
+        # Otherwise continue to fallback logic to complete
+    elif matches:
         return matches[:limit]
 
     if fallback == SelectionFallback.none:
