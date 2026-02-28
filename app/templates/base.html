@@ -226,8 +226,7 @@
             ? options.filter(o => String(o).toLowerCase().includes(q))
             : options;
 
-          // cap to keep DOM small
-          const limited = q ? filtered.slice(0, 30) : filtered.slice(0, 15);
+          const limited = filtered;
 
           menu.innerHTML = '';
           currentButtons = [];
