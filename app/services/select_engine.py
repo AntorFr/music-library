@@ -217,6 +217,60 @@ def apply_fallback(
                 return matches2[:limit]
         return []
 
+    if fallback == SelectionFallback.force:
+        # Relax filters progressively until we reach `limit` results.
+        # Prioritize items matching the most criteria (like soft).
+        current_all_of = list(group.all_of)
+
+        def rebuild_group_force(keep_categories: set[str]) -> TagQueryGroup:
+            new_all = [f for f in current_all_of if f.category in keep_categories]
+            return TagQueryGroup(all_of=new_all, any_of=group.any_of, none_of=group.none_of)
+
+        def passes_exclusion_force(i: int) -> bool:
+            if not passes_strict(i):
+                return False
+            for flt in group.none_of:
+                if _matches_filter(item_tags[i], flt):
+                    return False
+            return True
+
+        ordered_filters_force = []
+        by_cat_force = {f.category: f for f in group.all_of}
+        for cat in include_order:
+            flt = by_cat_force.get(cat)
+            if flt:
+                ordered_filters_force.append(flt)
+
+        if tiebreak is None:
+            tiebreak = lambda _item: tuple()  # noqa: E731
+
+        def sort_key_force(i: int) -> tuple:
+            matches_vec = [_matches_filter(item_tags[i], flt) for flt in ordered_filters_force]
+            count = sum(1 for m in matches_vec if m)
+            vec_key = tuple(0 if m else 1 for m in matches_vec)
+            return (-count, *vec_key, *tiebreak(items[i]))
+
+        collected: list[int] = []
+        seen: set[int] = set()
+
+        # Try progressively removing filters from the end.
+        for k in range(len(include_order), -1, -1):
+            keep = set(include_order[:k])
+            g2 = rebuild_group_force(keep)
+            batch = [
+                i for i in strict_indices
+                if i not in seen and passes_exclusion_force(i) and evaluate_group(item_tags[i], g2)
+            ]
+            batch.sort(key=sort_key_force)
+            for i in batch:
+                if i not in seen:
+                    seen.add(i)
+                    collected.append(i)
+                    if len(collected) >= limit:
+                        return collected
+
+        return collected
+
     # soft fallback
     if not group.all_of:
         return []

@@ -152,6 +152,7 @@ class SelectionFallback(str, enum.Enum):
     none = "none"
     soft = "soft"
     aggressive = "aggressive"
+    force = "force"
 
 
 class TagFilter(BaseModel):
