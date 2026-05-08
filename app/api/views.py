@@ -152,6 +152,7 @@ async def rfid_page(request: Request, db: AsyncSession = Depends(get_db)):
         for t in tags
     ]
     return templates.TemplateResponse(
+        request,
         "rfid/list.html",
         _base_ctx(request, tags=view),
     )
@@ -209,7 +210,7 @@ async def home(request: Request, db: AsyncSession = Depends(get_db)):
         "by_type": by_type,
     }
 
-    return templates.TemplateResponse("index.html", _base_ctx(
+    return templates.TemplateResponse(request, "index.html", _base_ctx(
         request,
         stats=stats,
         recent=recent_items,
@@ -275,9 +276,9 @@ async def media_list(
 
     # If HTMX request and target is #media-results, return partial
     if request.headers.get("HX-Target") == "media-results":
-        return templates.TemplateResponse("components/media_grid.html", ctx)
+        return templates.TemplateResponse(request, "components/media_grid.html", ctx)
 
-    return templates.TemplateResponse("media/list.html", ctx)
+    return templates.TemplateResponse(request, "media/list.html", ctx)
 
 
 # ---------------------------------------------------------------------------
@@ -290,7 +291,7 @@ async def media_new_form(request: Request, db: AsyncSession = Depends(get_db)):
     categories = await list_tag_categories(db)
     cat_labels = {c.slug: c.label for c in categories}
     cat_colors = {c.slug: c.color for c in categories if getattr(c, "color", None)}
-    return templates.TemplateResponse("media/form.html", _base_ctx(
+    return templates.TemplateResponse(request, "media/form.html", _base_ctx(
         request,
         item=None,
         available_tags=all_tags,
@@ -371,7 +372,7 @@ async def media_detail(request: Request, media_id: str, db: AsyncSession = Depen
         for t in await rfid_service.list_rfid_tags(db, assigned=False)
     ]
 
-    return templates.TemplateResponse("media/detail.html", _base_ctx(
+    return templates.TemplateResponse(request, "media/detail.html", _base_ctx(
         request,
         item=item,
         players=players,
@@ -392,8 +393,7 @@ async def media_podcast_episodes(
     if not item:
         raise HTTPException(404, detail="Média introuvable")
     if item.media_type != MediaType.podcast:
-        return templates.TemplateResponse(
-            "components/podcast_episodes.html",
+        return templates.TemplateResponse(request, "components/podcast_episodes.html",
             {"request": request, "episodes": [], "item": item, "error": None},
         )
 
@@ -436,8 +436,7 @@ async def media_podcast_episodes(
         logger.warning("Failed to fetch podcast episodes for %s: %s", media_id, exc)
         error = str(exc)
 
-    return templates.TemplateResponse(
-        "components/podcast_episodes.html",
+    return templates.TemplateResponse(request, "components/podcast_episodes.html",
         {"request": request, "episodes": episodes, "item": item, "error": error},
     )
 
@@ -451,8 +450,7 @@ async def media_audiobook_chapters(
     if not item:
         raise HTTPException(404, detail="Média introuvable")
     if item.media_type != MediaType.audiobook:
-        return templates.TemplateResponse(
-            "components/audiobook_chapters.html",
+        return templates.TemplateResponse(request, "components/audiobook_chapters.html",
             {"request": request, "chapters": [], "item": item, "error": None,
              "audiobook_uri": "", "resume_pct": 0, "resume_position_ms": None,
              "fully_played": None},
@@ -492,8 +490,7 @@ async def media_audiobook_chapters(
     if duration_s and resume_position_ms:
         resume_pct = round((resume_position_ms / 1000) / duration_s * 100)
 
-    return templates.TemplateResponse(
-        "components/audiobook_chapters.html",
+    return templates.TemplateResponse(request, "components/audiobook_chapters.html",
         {
             "request": request,
             "chapters": chapters,
@@ -528,8 +525,7 @@ async def media_assign_rfid(
             {"uid": t.uid, "name": t.name}
             for t in (getattr(item, "rfid_tags", []) or [])
         ]
-        return templates.TemplateResponse(
-            "components/rfid_assigned.html",
+        return templates.TemplateResponse(request, "components/rfid_assigned.html",
             _base_ctx(request, item=item, assigned_rfid=assigned_rfid),
         )
 
@@ -554,8 +550,7 @@ async def media_unassign_rfid(
             {"uid": t.uid, "name": t.name}
             for t in (getattr(item, "rfid_tags", []) or [])
         ]
-        return templates.TemplateResponse(
-            "components/rfid_assigned.html",
+        return templates.TemplateResponse(request, "components/rfid_assigned.html",
             _base_ctx(request, item=item, assigned_rfid=assigned_rfid),
         )
 
@@ -593,14 +588,14 @@ async def media_add_tag(
         cat_labels=cat_labels,
     )
     if request.headers.get("HX-Target") == "media-tags":
-        return templates.TemplateResponse("components/media_tags.html", {
+        return templates.TemplateResponse(request, "components/media_tags.html", {
             "request": request,
             "item": item,
             "cat_labels": cat_labels,
             "cat_colors": cat_colors,
         })
 
-    return templates.TemplateResponse("components/media_tags_block.html", {
+    return templates.TemplateResponse(request, "components/media_tags_block.html", {
         "request": request,
         "item": item,
         "cat_labels": cat_labels,
@@ -631,14 +626,14 @@ async def media_remove_tag(
         cat_labels=cat_labels,
     )
     if request.headers.get("HX-Target") == "media-tags":
-        return templates.TemplateResponse("components/media_tags.html", {
+        return templates.TemplateResponse(request, "components/media_tags.html", {
             "request": request,
             "item": item,
             "cat_labels": cat_labels,
             "cat_colors": cat_colors,
         })
 
-    return templates.TemplateResponse("components/media_tags_block.html", {
+    return templates.TemplateResponse(request, "components/media_tags_block.html", {
         "request": request,
         "item": item,
         "cat_labels": cat_labels,
@@ -656,7 +651,7 @@ async def media_edit_form(request: Request, media_id: str, db: AsyncSession = De
     categories = await list_tag_categories(db)
     cat_labels = {c.slug: c.label for c in categories}
     cat_colors = {c.slug: c.color for c in categories if getattr(c, "color", None)}
-    return templates.TemplateResponse("media/form.html", _base_ctx(
+    return templates.TemplateResponse(request, "media/form.html", _base_ctx(
         request,
         item=item,
         available_tags=all_tags,
@@ -716,7 +711,7 @@ async def tags_page(request: Request, db: AsyncSession = Depends(get_db)):
     categories = await list_tag_categories(db)
     cat_labels = {c.slug: c.label for c in categories}
     cat_colors = {c.slug: c.color for c in categories if getattr(c, "color", None)}
-    return templates.TemplateResponse("tags/list.html", _base_ctx(
+    return templates.TemplateResponse(request, "tags/list.html", _base_ctx(
         request,
         tags=all_tags,
         categories=categories,
@@ -778,7 +773,7 @@ async def tags_category_delete(
 
 @router.get("/browse", response_class=HTMLResponse)
 async def browse_page(request: Request):
-    return templates.TemplateResponse("ma/browse.html", _base_ctx(request))
+    return templates.TemplateResponse(request, "ma/browse.html", _base_ctx(request))
 
 
 @router.get("/browse/library/{media_type}", response_class=HTMLResponse)
@@ -828,7 +823,7 @@ async def browse_library(request: Request, media_type: str):
         logger.error("MA browse error: %s", e)
         items = []
 
-    return templates.TemplateResponse("components/ma_items.html", _base_ctx(
+    return templates.TemplateResponse(request, "components/ma_items.html", _base_ctx(
         request, items=items,
     ))
 
@@ -921,7 +916,7 @@ async def browse_search(request: Request, q: str = Query("", alias="maSearch")):
         logger.error("MA search error: %s", e)
         return HTMLResponse(f'<div class="empty-state"><i class="mdi mdi-alert-circle"></i><p>Erreur Music Assistant: {e}</p></div>')
 
-    return templates.TemplateResponse("components/ma_search_results.html", _base_ctx(
+    return templates.TemplateResponse(request, "components/ma_search_results.html", _base_ctx(
         request, groups=groups, has_results=has_results,
     ))
 
@@ -997,6 +992,6 @@ async def players_page(request: Request):
     except Exception as e:
         logger.error("Failed to fetch players: %s", e)
 
-    return templates.TemplateResponse("ma/players.html", _base_ctx(
+    return templates.TemplateResponse(request, "ma/players.html", _base_ctx(
         request, players=players,
     ))
