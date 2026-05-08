@@ -384,6 +384,30 @@ async def media_detail(request: Request, media_id: str, db: AsyncSession = Depen
     ))
 
 
+def _resolve_ma_provider_and_id(item, expected_kind: str) -> tuple[str | None, str | None]:
+    """Best-effort extraction of MA (provider, item_id) from a local media row.
+
+    Order: metadata_extra.ma_item_id + item.provider, then parsing of source_uri
+    if it follows the canonical ``<provider>://<kind>/<id>`` form.
+    """
+    provider = (item.provider or "").strip() or None
+    item_id: str | None = None
+    extra = getattr(item, "metadata_extra", None) or {}
+    if isinstance(extra, dict):
+        ma_id = extra.get("ma_item_id")
+        if ma_id:
+            item_id = str(ma_id)
+    if not item_id:
+        uri = item.source_uri or ""
+        if "://" in uri:
+            scheme, rest = uri.split("://", 1)
+            parts = rest.split("/", 1)
+            if len(parts) == 2 and parts[0] == expected_kind:
+                provider = provider or scheme
+                item_id = parts[1]
+    return provider, item_id
+
+
 @router.get("/media/{media_id}/episodes", response_class=HTMLResponse)
 async def media_podcast_episodes(
     request: Request, media_id: str, db: AsyncSession = Depends(get_db)
@@ -403,19 +427,9 @@ async def media_podcast_episodes(
         from app.services.music_assistant import get_ma_client
         ma = await get_ma_client()
 
-        # Try to parse provider/item_id from source_uri ("<provider>://podcast/<id>")
-        provider: str | None = None
-        item_id: str | None = None
-        uri = item.source_uri or ""
-        if "://" in uri:
-            scheme, rest = uri.split("://", 1)
-            parts = rest.split("/", 1)
-            if len(parts) == 2 and parts[0] == "podcast":
-                provider = scheme
-                item_id = parts[1]
-
+        provider, item_id = _resolve_ma_provider_and_id(item, "podcast")
         if not provider or not item_id:
-            ma_item = await ma.get_item_by_uri(uri)
+            ma_item = await ma.get_item_by_uri(item.source_uri or "")
             provider = ma_item.provider
             item_id = ma_item.item_id
 
@@ -465,7 +479,12 @@ async def media_audiobook_chapters(
     try:
         from app.services.music_assistant import get_ma_client
         ma = await get_ma_client()
-        ma_item = await ma.get_item_by_uri(audiobook_uri)
+
+        provider, item_id = _resolve_ma_provider_and_id(item, "audiobook")
+        if provider and item_id:
+            ma_item = await ma.get_item("audiobook", item_id, provider)
+        else:
+            ma_item = await ma.get_item_by_uri(audiobook_uri)
         audiobook_uri = ma_item.uri or audiobook_uri
         resume_position_ms = ma_item.resume_position_ms
         fully_played = ma_item.fully_played

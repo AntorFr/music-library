@@ -374,7 +374,8 @@ h4 { font-size: 1rem; font-weight: 700; }
 }
 
 .card:hover {
-  background: #292929;
+  background: var(--surface);
+  box-shadow: 0 2px 8px var(--shadow);
 }
 
 .card-body {
