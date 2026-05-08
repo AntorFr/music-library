@@ -2,8 +2,10 @@ name: Build & Publish Docker Image
 
 on:
   # Build on every push to main (tags :main)
+  # Build on tag push v* (tags :x.y.z, :x.y, :x)
   push:
     branches: [main]
+    tags: ['v*']
   # Build + tag on release (tags :latest, :x.y.z, :x.y, :x)
   release:
     types: [published]
