@@ -200,14 +200,28 @@ async def ma_play(
     uri: str = Query(..., description="URI du média à jouer"),
     option: str | None = Query(None, description="play, replace, next, add"),
     radio_mode: bool = False,
+    seek: int | None = Query(
+        None,
+        description="Position en secondes — saute à cet offset après le démarrage (ex: début de chapitre).",
+    ),
     ma: MusicAssistantClient = Depends(get_ma_client),
 ):
     """Lancer la lecture d'un média sur un player via Music Assistant."""
     try:
         await ma.play_media(queue_id, uri, option=option, radio_mode=radio_mode)
+        if seek and seek > 0:
+            # Wait for the queue to actually start playing the item before seeking.
+            import asyncio
+            await asyncio.sleep(1.5)
+            try:
+                await ma.seek(queue_id, seek)
+            except Exception as exc:
+                # Non-fatal: playback started, only seek failed
+                import logging
+                logging.getLogger(__name__).warning("Seek failed: %s", exc)
     except Exception as exc:
         raise HTTPException(500, detail=f"Erreur de lecture: {exc}")
-    return {"status": "ok", "queue_id": queue_id, "uri": uri}
+    return {"status": "ok", "queue_id": queue_id, "uri": uri, "seek": seek}
 
 
 # ---------------------------------------------------------------------------

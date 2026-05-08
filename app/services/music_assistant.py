@@ -63,6 +63,9 @@ class MAMediaItem:
         self.images: list[MAImage] = [
             MAImage(img) for img in (metadata.get("images") or [])
         ]
+        # Chapters (audiobooks, sometimes podcast episodes) — list of dicts
+        # with keys: position, name, start (sec), end (sec | None)
+        self.chapters: list[dict] = list(metadata.get("chapters") or [])
 
         # Provider mappings (other providers where this item exists)
         self.provider_mappings: list[dict] = data.get("provider_mappings", [])
@@ -561,6 +564,12 @@ class MusicAssistantClient:
             media=media,
             option=option,
             radio_mode=radio_mode,
+        )
+
+    async def seek(self, queue_id: str, position: int) -> None:
+        """Seek to position (in seconds) on the current queue item."""
+        await self._send_command(
+            "player_queues/seek", queue_id=queue_id, position=int(position)
         )
 
     # --- Image URLs ---

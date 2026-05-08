@@ -442,6 +442,71 @@ async def media_podcast_episodes(
     )
 
 
+@router.get("/media/{media_id}/chapters", response_class=HTMLResponse)
+async def media_audiobook_chapters(
+    request: Request, media_id: str, db: AsyncSession = Depends(get_db)
+):
+    """HTMX partial: list of audiobook chapters from Music Assistant."""
+    item = await media_service.get_media(db, media_id)
+    if not item:
+        raise HTTPException(404, detail="Média introuvable")
+    if item.media_type != MediaType.audiobook:
+        return templates.TemplateResponse(
+            "components/audiobook_chapters.html",
+            {"request": request, "chapters": [], "item": item, "error": None,
+             "audiobook_uri": "", "resume_pct": 0, "resume_position_ms": None,
+             "fully_played": None},
+        )
+
+    error: str | None = None
+    chapters: list[dict] = []
+    audiobook_uri = item.source_uri or ""
+    resume_position_ms: int | None = None
+    fully_played: bool | None = None
+    duration_s = 0
+    try:
+        from app.services.music_assistant import get_ma_client
+        ma = await get_ma_client()
+        ma_item = await ma.get_item_by_uri(audiobook_uri)
+        audiobook_uri = ma_item.uri or audiobook_uri
+        resume_position_ms = ma_item.resume_position_ms
+        fully_played = ma_item.fully_played
+        duration_s = ma_item.duration or 0
+        for ch in ma_item.chapters:
+            start = float(ch.get("start", 0) or 0)
+            end = ch.get("end")
+            end_f = float(end) if end is not None else None
+            chapters.append({
+                "position": int(ch.get("position", 0) or 0),
+                "name": ch.get("name", "") or "",
+                "start": start,
+                "end": end_f,
+                "duration": (end_f - start) if end_f else None,
+            })
+        chapters.sort(key=lambda c: c["position"])
+    except Exception as exc:
+        logger.warning("Failed to fetch audiobook chapters for %s: %s", media_id, exc)
+        error = str(exc)
+
+    resume_pct = 0
+    if duration_s and resume_position_ms:
+        resume_pct = round((resume_position_ms / 1000) / duration_s * 100)
+
+    return templates.TemplateResponse(
+        "components/audiobook_chapters.html",
+        {
+            "request": request,
+            "chapters": chapters,
+            "item": item,
+            "error": error,
+            "audiobook_uri": audiobook_uri,
+            "resume_position_ms": resume_position_ms,
+            "fully_played": fully_played,
+            "resume_pct": resume_pct,
+        },
+    )
+
+
 @router.post("/media/{media_id}/rfid")
 async def media_assign_rfid(
     request: Request,

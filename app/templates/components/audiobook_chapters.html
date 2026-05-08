@@ -1,0 +1,99 @@
+{# HTMX partial: list of audiobook chapters #}
+<div class="card-body">
+  <div class="d-flex align-center gap-2 mb-2" style="flex-wrap:wrap">
+    <h3 style="margin:0;flex:1;min-width:160px">
+      <i class="mdi mdi-format-list-bulleted-square"></i>
+      Chapitres
+      {% if chapters %}<span class="text-muted text-sm" id="chapter-count">({{ chapters|length }})</span>{% endif %}
+    </h3>
+    {% if chapters %}
+    <div class="search-bar" style="max-width:280px">
+      <i class="mdi mdi-magnify"></i>
+      <input type="search" id="chapterFilter" placeholder="Filtrer les chapitres…"
+             oninput="filterChapters(this.value)">
+    </div>
+    {% endif %}
+  </div>
+
+  {% if fully_played %}
+  <div class="badge badge-success mb-2"><i class="mdi mdi-check"></i> Livre terminé</div>
+  {% elif resume_pct and resume_pct > 0 %}
+  <div class="d-flex align-center gap-2 mb-2 text-sm text-muted" style="max-width:480px">
+    <span>Progression :</span>
+    <span style="flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+      <span style="display:block;height:100%;width:{{ resume_pct }}%;background:var(--primary)"></span>
+    </span>
+    <span>{{ resume_pct }}%</span>
+    <button class="btn btn-surface btn-sm" onclick="playChapter('{{ audiobook_uri }}', 0, true)" title="Reprendre la lecture">
+      <i class="mdi mdi-play"></i> Reprendre
+    </button>
+  </div>
+  {% endif %}
+
+  {% if error %}
+  <div class="empty-state">
+    <i class="mdi mdi-alert-circle-outline"></i>
+    <p>Impossible de charger les chapitres : {{ error }}</p>
+  </div>
+  {% elif not chapters %}
+  <div class="empty-state">
+    <i class="mdi mdi-book-open-page-variant-outline"></i>
+    <p>Aucun chapitre disponible pour ce livre.</p>
+  </div>
+  {% else %}
+  <div class="chapter-list">
+    {% for ch in chapters %}
+    {% set dur = ch.duration or 0 %}
+    <div class="chapter-row d-flex align-center gap-2"
+         data-name="{{ ch.name|lower }}"
+         style="padding:10px 4px;border-bottom:1px solid var(--border)">
+      <div class="text-muted text-sm" style="min-width:36px;text-align:right;font-variant-numeric:tabular-nums">
+        {% if ch.position %}#{{ ch.position }}{% endif %}
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+             title="{{ ch.name }}">{{ ch.name or 'Chapitre ' ~ ch.position }}</div>
+        <div class="text-muted text-sm d-flex align-center gap-2 mt-1">
+          {% if dur %}
+          {% set m = (dur // 60)|int %}{% set s = (dur % 60)|int %}
+          <span><i class="mdi mdi-clock-outline"></i>
+            {% if m >= 60 %}{{ (m // 60)|int }}h{{ '%02d'|format((m % 60)|int) }}{% else %}{{ m }} min{% endif %}
+          </span>
+          {% endif %}
+          <span class="text-sm" style="font-variant-numeric:tabular-nums">
+            {% set sm = (ch.start // 60)|int %}{% set ss = (ch.start % 60)|int %}
+            début : {% if sm >= 60 %}{{ (sm // 60)|int }}h{{ '%02d'|format((sm % 60)|int) }}{% else %}{{ '%d:%02d'|format(sm, ss) }}{% endif %}
+          </span>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-sm"
+              onclick="playChapter('{{ audiobook_uri }}', {{ ch.start|round|int }})"
+              title="Lire à partir de ce chapitre">
+        <i class="mdi mdi-play"></i>
+      </button>
+    </div>
+    {% endfor %}
+  </div>
+  <div id="chapter-empty-filter" class="empty-state" style="display:none">
+    <i class="mdi mdi-magnify-close"></i>
+    <p>Aucun chapitre ne correspond.</p>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+function filterChapters(q) {
+  const term = (q || '').trim().toLowerCase();
+  const rows = document.querySelectorAll('#audiobook-chapters .chapter-row');
+  let visible = 0;
+  rows.forEach(r => {
+    const match = !term || (r.dataset.name || '').includes(term);
+    r.style.display = match ? '' : 'none';
+    if (match) visible++;
+  });
+  const empty = document.getElementById('chapter-empty-filter');
+  if (empty) empty.style.display = (rows.length && !visible) ? '' : 'none';
+  const count = document.getElementById('chapter-count');
+  if (count) count.textContent = term ? `(${visible}/${rows.length})` : `(${rows.length})`;
+}
+</script>
