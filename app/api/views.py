@@ -383,6 +383,65 @@ async def media_detail(request: Request, media_id: str, db: AsyncSession = Depen
     ))
 
 
+@router.get("/media/{media_id}/episodes", response_class=HTMLResponse)
+async def media_podcast_episodes(
+    request: Request, media_id: str, db: AsyncSession = Depends(get_db)
+):
+    """HTMX partial: list of podcast episodes from Music Assistant."""
+    item = await media_service.get_media(db, media_id)
+    if not item:
+        raise HTTPException(404, detail="Média introuvable")
+    if item.media_type != MediaType.podcast:
+        return templates.TemplateResponse(
+            "components/podcast_episodes.html",
+            {"request": request, "episodes": [], "item": item, "error": None},
+        )
+
+    error: str | None = None
+    episodes: list[dict] = []
+    try:
+        from app.services.music_assistant import get_ma_client
+        ma = await get_ma_client()
+
+        # Try to parse provider/item_id from source_uri ("<provider>://podcast/<id>")
+        provider: str | None = None
+        item_id: str | None = None
+        uri = item.source_uri or ""
+        if "://" in uri:
+            scheme, rest = uri.split("://", 1)
+            parts = rest.split("/", 1)
+            if len(parts) == 2 and parts[0] == "podcast":
+                provider = scheme
+                item_id = parts[1]
+
+        if not provider or not item_id:
+            ma_item = await ma.get_item_by_uri(uri)
+            provider = ma_item.provider
+            item_id = ma_item.item_id
+
+        ma_episodes = await ma.get_podcast_episodes(item_id, provider)
+        episodes = [
+            {
+                "uri": e.uri,
+                "name": e.name,
+                "position": e.position,
+                "duration": e.duration,
+                "fully_played": e.fully_played,
+                "resume_position_ms": e.resume_position_ms,
+                "thumb_url": ma.get_image_url(e.thumb_image, size=120),
+            }
+            for e in ma_episodes
+        ]
+    except Exception as exc:
+        logger.warning("Failed to fetch podcast episodes for %s: %s", media_id, exc)
+        error = str(exc)
+
+    return templates.TemplateResponse(
+        "components/podcast_episodes.html",
+        {"request": request, "episodes": episodes, "item": item, "error": error},
+    )
+
+
 @router.post("/media/{media_id}/rfid")
 async def media_assign_rfid(
     request: Request,

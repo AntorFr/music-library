@@ -73,6 +73,11 @@ class MAMediaItem:
         self.duration: int = data.get("duration", 0)
         self.owner: str = data.get("owner", "")
 
+        # Podcast episode-specific fields (present only when media_type == podcast_episode)
+        self.position: int = data.get("position", 0)
+        self.fully_played: bool | None = data.get("fully_played")
+        self.resume_position_ms: int | None = data.get("resume_position_ms")
+
     @property
     def artist_names(self) -> list[str]:
         """Extract artist names from the artists list."""
@@ -114,6 +119,9 @@ class MAMediaItem:
             "thumb_url": thumb.path if thumb else None,
             "thumb_provider": thumb.provider if thumb else None,
             "thumb_remotely_accessible": thumb.remotely_accessible if thumb else False,
+            "position": self.position,
+            "fully_played": self.fully_played,
+            "resume_position_ms": self.resume_position_ms,
         }
 
     def __repr__(self) -> str:
@@ -490,6 +498,23 @@ class MusicAssistantClient:
             "music/audiobooks/library_items", search=search, limit=limit
         )
         return [MAMediaItem(i) for i in (result or [])]
+
+    async def get_podcast_episodes(
+        self, item_id: str, provider: str
+    ) -> list[MAMediaItem]:
+        """List episodes of a podcast.
+
+        MA always re-fetches episodes from the provider so resume position
+        info stays fresh — do not cache the result.
+        """
+        result = await self._send_command(
+            "music/podcasts/podcast_episodes",
+            item_id=item_id,
+            provider_instance_id_or_domain=provider,
+        )
+        episodes = [MAMediaItem(i) for i in (result or [])]
+        episodes.sort(key=lambda e: e.position)
+        return episodes
 
     async def get_library_podcasts(
         self, search: str | None = None, limit: int | None = None

@@ -1,0 +1,95 @@
+{# HTMX partial: list of podcast episodes #}
+<div class="card-body">
+  <div class="d-flex align-center gap-2 mb-2" style="flex-wrap:wrap">
+    <h3 style="margin:0;flex:1;min-width:160px">
+      <i class="mdi mdi-format-list-numbered"></i>
+      Épisodes
+      {% if episodes %}<span class="text-muted text-sm" id="episode-count">({{ episodes|length }})</span>{% endif %}
+    </h3>
+    {% if episodes %}
+    <div class="search-bar" style="max-width:280px">
+      <i class="mdi mdi-magnify"></i>
+      <input type="search" id="episodeFilter" placeholder="Filtrer les épisodes…"
+             oninput="filterEpisodes(this.value)">
+    </div>
+    {% endif %}
+  </div>
+
+  {% if error %}
+  <div class="empty-state">
+    <i class="mdi mdi-alert-circle-outline"></i>
+    <p>Impossible de charger les épisodes : {{ error }}</p>
+  </div>
+  {% elif not episodes %}
+  <div class="empty-state">
+    <i class="mdi mdi-podcast"></i>
+    <p>Aucun épisode trouvé.</p>
+  </div>
+  {% else %}
+  <div class="episode-list">
+    {% for ep in episodes %}
+    {% set dur = ep.duration or 0 %}
+    {% set pos_ms = ep.resume_position_ms or 0 %}
+    {% set pct = ((pos_ms / 1000) / dur * 100) if (dur and pos_ms) else 0 %}
+    <div class="episode-row d-flex align-center gap-2"
+         data-name="{{ ep.name|lower }}"
+         style="padding:10px 4px;border-bottom:1px solid var(--border)">
+      <div class="text-muted text-sm" style="min-width:36px;text-align:right;font-variant-numeric:tabular-nums">
+        {% if ep.position %}#{{ ep.position }}{% endif %}
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+             title="{{ ep.name }}">{{ ep.name }}</div>
+        <div class="text-muted text-sm d-flex align-center gap-2 mt-1">
+          {% if dur %}
+          <span><i class="mdi mdi-clock-outline"></i>
+            {% set m = (dur // 60) %}{% set s = dur % 60 %}
+            {% if m >= 60 %}{{ m // 60 }}h{{ '%02d'|format(m % 60) }}{% else %}{{ m }} min{% endif %}
+          </span>
+          {% endif %}
+          {% if ep.fully_played %}
+          <span class="badge badge-success" style="font-size:0.7rem">
+            <i class="mdi mdi-check"></i> Écouté
+          </span>
+          {% elif pct > 0 %}
+          <span style="display:inline-flex;align-items:center;gap:6px;flex:1;max-width:240px">
+            <span style="flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden">
+              <span style="display:block;height:100%;width:{{ pct }}%;background:var(--primary)"></span>
+            </span>
+            <span class="text-sm">{{ pct|round|int }}%</span>
+          </span>
+          {% endif %}
+        </div>
+      </div>
+      <button class="btn btn-primary btn-sm"
+              onclick="playEpisode('{{ ep.uri }}')"
+              title="Lire cet épisode">
+        <i class="mdi mdi-play"></i>
+      </button>
+    </div>
+    {% endfor %}
+  </div>
+  <div id="episode-empty-filter" class="empty-state" style="display:none">
+    <i class="mdi mdi-magnify-close"></i>
+    <p>Aucun épisode ne correspond.</p>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+function filterEpisodes(q) {
+  const term = (q || '').trim().toLowerCase();
+  const rows = document.querySelectorAll('#podcast-episodes .episode-row');
+  let visible = 0;
+  rows.forEach(r => {
+    const match = !term || (r.dataset.name || '').includes(term);
+    r.style.display = match ? '' : 'none';
+    if (match) visible++;
+  });
+  const empty = document.getElementById('episode-empty-filter');
+  if (empty) empty.style.display = (rows.length && !visible) ? '' : 'none';
+  const count = document.getElementById('episode-count');
+  if (count) count.textContent = term ? `(${visible}/${rows.length})` : `(${rows.length})`;
+}
+</script>
+

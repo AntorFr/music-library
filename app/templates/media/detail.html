@@ -82,6 +82,20 @@
   </div>
 </div>
 
+{% if item.media_type.value == "podcast" %}
+<div class="card mt-3" id="podcast-episodes"
+     hx-get="/media/{{ item.id }}/episodes"
+     hx-trigger="load"
+     hx-swap="innerHTML">
+  <div class="card-body">
+    <h3 class="mb-2"><i class="mdi mdi-format-list-numbered"></i> Épisodes</h3>
+    <div style="padding:24px;text-align:center">
+      <div class="spinner" style="margin:auto"></div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 {% if item.description %}
 <div class="card mt-3">
   <div class="card-body">
@@ -120,6 +134,23 @@
 
 {% block scripts %}
 <script>
+async function playEpisode(uri) {
+  const sel = document.getElementById('playerSelect');
+  const queueId = sel ? sel.value : null;
+  if (!queueId) { showToast('Aucune enceinte sélectionnée', 'error'); return; }
+  try {
+    const r = await fetch(`/api/v1/ma/play?queue_id=${encodeURIComponent(queueId)}&uri=${encodeURIComponent(uri)}`, {method:'POST'});
+    if (r.ok) {
+      showToast('Lecture lancée !', 'success');
+    } else {
+      const e = await r.json();
+      showToast('Erreur : ' + (e.detail || 'Inconnu'), 'error');
+    }
+  } catch(e) {
+    showToast('Erreur de connexion', 'error');
+  }
+}
+
 async function playMedia() {
   const queueId = document.getElementById('playerSelect').value;
   const uri = '{{ item.source_uri }}';
