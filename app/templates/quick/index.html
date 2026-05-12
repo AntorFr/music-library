@@ -1,333 +1,315 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Lanceur — Music Library</title>
-  <meta name="theme-color" content="#03a9f4">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="Music">
-  <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg">
-  <link rel="apple-touch-icon" href="/static/img/logo.svg">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
-  <link rel="stylesheet" href="/static/css/app.css">
-</head>
-<body class="quick-body">
-  <script id="quick-data" type="application/json">{{ quick_data | tojson }}</script>
+{% extends "base.html" %}
 
-  <main class="quick-shell" id="quickShell">
-    <header class="quick-header">
-      <div>
-        <div class="quick-kicker">Music Library</div>
-        <h1>Lanceur</h1>
+{% block title %}Lanceur — Music Library{% endblock %}
+
+{% block head_extra %}
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#03a9f4">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Music">
+<link rel="apple-touch-icon" href="/static/img/logo.svg">
+{% endblock %}
+
+{% block topbar_title %}Lanceur{% endblock %}
+
+{% block content %}
+<script id="quick-data" type="application/json">{{ quick_data | tojson }}</script>
+
+{# ----- Setup card (shown until owner + player chosen) -------------------- #}
+<section id="quickSetup">
+  <div class="card quick-setup-card">
+    <div class="card-body">
+      <h2 class="mb-3">
+        <i class="mdi mdi-gesture-tap-button"></i>
+        Choisir un profil et une enceinte
+      </h2>
+
+      {% if invalid_owner %}
+      <div class="alert alert-warning mb-3">
+        Le propriétaire « {{ invalid_owner }} » n'existe plus.
       </div>
-      <a class="quick-admin-link" href="/media" aria-label="Ouvrir le catalogue">
-        <i class="mdi mdi-cog"></i>
-      </a>
-    </header>
-
-    <section class="quick-setup" id="quickSetup">
-      <div class="quick-setup-card">
-        <div class="quick-setup-icon"><i class="mdi mdi-gesture-tap-button"></i></div>
-        <h2>Choisir un profil et une enceinte</h2>
-
-        {% if invalid_owner %}
-        <p class="quick-alert">
-          Le propriétaire « {{ invalid_owner }} » n'existe plus.
-        </p>
-        {% endif %}
-
-        <label class="quick-field">
-          <span>Propriétaire</span>
-          <select id="quickOwnerSelect">
-            <option value="">Choisir...</option>
-            {% for value in owners %}
-            <option value="{{ value }}" {% if value == selected_owner %}selected{% endif %}>{{ value }}</option>
-            {% endfor %}
-          </select>
-        </label>
-
-        <label class="quick-field">
-          <span>Enceinte</span>
-          <select id="quickPlayerSelect" {% if not players %}disabled{% endif %}>
-            <option value="">Choisir...</option>
-            {% for player in players %}
-            <option value="{{ player.player_id }}">{{ player.name }}</option>
-            {% endfor %}
-          </select>
-        </label>
-
-        {% if not owners %}
-        <p class="quick-muted">Aucun tag propriétaire n'est disponible.</p>
-        {% endif %}
-        {% if not players %}
-        <p class="quick-muted">Aucune enceinte Music Assistant n'est disponible pour le moment.</p>
-        {% endif %}
-      </div>
-    </section>
-
-    <section class="quick-app" id="quickApp" hidden>
-      <div class="quick-current">
-        <label>
-          <span>Profil</span>
-          <select id="quickOwnerSelectTop">
-            {% for value in owners %}
-            <option value="{{ value }}" {% if value == selected_owner %}selected{% endif %}>{{ value }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <label>
-          <span>Enceinte</span>
-          <select id="quickPlayerSelectTop">
-            {% for player in players %}
-            <option value="{{ player.player_id }}">{{ player.name }}</option>
-            {% endfor %}
-          </select>
-        </label>
-      </div>
-
-      {% if selected_owner %}
-        {% if items %}
-        <div class="quick-grid" aria-live="polite">
-          {% for item in items %}
-          {% set mtype = item.media_type.value %}
-          {% set is_drilldown = mtype in ["podcast", "audiobook"] %}
-          <button class="quick-tile"
-                  type="button"
-                  data-media-id="{{ item.id }}"
-                  data-media-type="{{ mtype }}"
-                  data-uri="{{ item.source_uri }}"
-                  data-title="{{ item.title }}"
-                  {% if is_drilldown %}
-                  onclick="openQuickPanel('{{ 'episodes' if mtype == 'podcast' else 'chapters' }}', this.dataset.mediaId, this.dataset.title)"
-                  {% else %}
-                  onclick="playQuickMedia(this.dataset.uri, this.dataset.title)"
-                  {% endif %}>
-            <span class="quick-cover">
-              <img src="/covers/{{ item.id }}.jpg" alt=""
-                   loading="lazy"
-                   onerror="this.src='/static/img/default_cover.svg'">
-              <span class="quick-play-icon">
-                <i class="mdi mdi-{{ 'format-list-bulleted' if is_drilldown else 'play' }}"></i>
-              </span>
-            </span>
-            <span class="quick-title">{{ item.title }}</span>
-            <span class="quick-subtitle">
-              <i class="mdi mdi-{{ type_icons.get(mtype, 'music') }}"></i>
-              {{ type_labels.get(mtype, mtype) }}
-            </span>
-          </button>
-          {% endfor %}
-        </div>
-        {% else %}
-        <div class="quick-empty">
-          <i class="mdi mdi-music-box-multiple-outline"></i>
-          <p>Aucun média pour {{ selected_owner }}.</p>
-        </div>
-        {% endif %}
       {% endif %}
 
-      <section class="quick-panel" id="quickPanel" hidden>
-        <div class="quick-panel-head">
-          <h2 id="quickPanelTitle">Détail</h2>
-          <button type="button" class="quick-icon-button" onclick="closeQuickPanel()" aria-label="Fermer">
-            <i class="mdi mdi-close"></i>
-          </button>
+      <div class="form-group">
+        <label class="form-label" for="quickOwnerSelect">Propriétaire</label>
+        <select id="quickOwnerSelect" class="form-control form-control-lg">
+          <option value="">Choisir…</option>
+          {% for value in owners %}
+          <option value="{{ value }}" {% if value == selected_owner %}selected{% endif %}>{{ value }}</option>
+          {% endfor %}
+        </select>
+        {% if not owners %}
+        <small class="text-muted">Aucun tag propriétaire disponible.</small>
+        {% endif %}
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="quickPlayerSelect">Enceinte</label>
+        <select id="quickPlayerSelect" class="form-control form-control-lg" {% if not players %}disabled{% endif %}>
+          <option value="">Choisir…</option>
+          {% for player in players %}
+          <option value="{{ player.player_id }}">{{ player.name }}</option>
+          {% endfor %}
+        </select>
+        {% if not players %}
+        <small class="text-muted">Aucune enceinte Music Assistant disponible.</small>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</section>
+
+{# ----- Launcher app (shown when owner + player chosen) ------------------- #}
+<section id="quickApp" hidden>
+  <div class="quick-toolbar">
+    <div class="form-group mb-0">
+      <label class="form-label" for="quickOwnerSelectTop">Profil</label>
+      <select id="quickOwnerSelectTop" class="form-control">
+        <option value="">Choisir…</option>
+        {% for value in owners %}
+        <option value="{{ value }}" {% if value == selected_owner %}selected{% endif %}>{{ value }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group mb-0">
+      <label class="form-label" for="quickPlayerSelectTop">Enceinte</label>
+      <select id="quickPlayerSelectTop" class="form-control">
+        <option value="">Choisir…</option>
+        {% for player in players %}
+        <option value="{{ player.player_id }}">{{ player.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  {% if selected_owner %}
+    {% if items %}
+    <div class="media-grid" aria-live="polite">
+      {% for item in items %}
+      {% set mtype = item.media_type.value %}
+      {% set is_drilldown = mtype in ["podcast", "audiobook"] %}
+      <button class="media-card quick-tile"
+              type="button"
+              data-media-id="{{ item.id }}"
+              data-media-type="{{ mtype }}"
+              data-uri="{{ item.source_uri }}"
+              data-title="{{ item.title }}"
+              {% if is_drilldown %}
+              onclick="openQuickPanel('{{ 'episodes' if mtype == 'podcast' else 'chapters' }}', this.dataset.mediaId, this.dataset.title)"
+              {% else %}
+              onclick="playQuickMedia(this.dataset.uri, this.dataset.title)"
+              {% endif %}>
+        <div class="thumb-container">
+          <img src="/covers/{{ item.id }}.jpg" alt=""
+               loading="lazy"
+               onerror="this.src='/static/img/default_cover.svg'">
+          <div class="play-overlay">
+            <i class="mdi mdi-{{ 'format-list-bulleted' if is_drilldown else 'play' }}"></i>
+          </div>
         </div>
-        <div id="quickPanelBody"></div>
-      </section>
-    </section>
-  </main>
+        <div class="card-info">
+          <div class="card-title" title="{{ item.title }}">{{ item.title }}</div>
+          <div class="card-subtitle">
+            <i class="mdi mdi-{{ type_icons.get(mtype, 'music') }}"></i>
+            {{ type_labels.get(mtype, mtype) }}
+          </div>
+        </div>
+      </button>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <i class="mdi mdi-music-box-multiple-outline"></i>
+      <p>Aucun média pour {{ selected_owner }}.</p>
+    </div>
+    {% endif %}
+  {% endif %}
 
-  <div class="toast-container quick-toast-container" id="toastContainer"></div>
+  <section class="card quick-panel mt-3" id="quickPanel" hidden>
+    <div class="card-body">
+      <div class="d-flex align-center justify-between mb-2">
+        <h2 id="quickPanelTitle" class="m-0">Détail</h2>
+        <button type="button" class="btn btn-icon" onclick="closeQuickPanel()" aria-label="Fermer">
+          <i class="mdi mdi-close"></i>
+        </button>
+      </div>
+      <div id="quickPanelBody"></div>
+    </div>
+  </section>
+</section>
+{% endblock %}
 
-  <script>
-    const QUICK_OWNER_KEY = 'musicLibrary.quick.owner';
-    const QUICK_PLAYER_KEY = 'musicLibrary.quick.queueId';
-    const quickData = JSON.parse(document.getElementById('quick-data').textContent || '{}');
+{% block scripts %}
+<script>
+  const QUICK_OWNER_KEY = 'musicLibrary.quick.owner';
+  const QUICK_PLAYER_KEY = 'musicLibrary.quick.queueId';
+  const quickData = JSON.parse(document.getElementById('quick-data').textContent || '{}');
 
-    function showToast(message, type = 'info') {
-      const container = document.getElementById('toastContainer');
-      const toast = document.createElement('div');
-      toast.className = `toast toast-${type}`;
-      const icon = type === 'success' ? 'check-circle' :
-                   type === 'error' ? 'alert-circle' : 'information';
-      toast.innerHTML = `<i class="mdi mdi-${icon}"></i> ${message}`;
-      container.appendChild(toast);
-      setTimeout(() => {
-        toast.style.opacity = '0';
-        toast.style.transform = 'translateY(8px)';
-        toast.style.transition = 'all 0.3s';
-        setTimeout(() => toast.remove(), 300);
-      }, 3500);
+  function setSelectValue(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.value = value || '';
+  }
+
+  function getSelectedQueueId() {
+    const queueId = localStorage.getItem(QUICK_PLAYER_KEY);
+    if (!queueId) return null;
+    if (!(quickData.players || []).includes(queueId)) {
+      localStorage.removeItem(QUICK_PLAYER_KEY);
+      return null;
+    }
+    return queueId;
+  }
+
+  function syncQuickState() {
+    const owners = quickData.owners || [];
+    const selectedOwner = quickData.selected_owner || '';
+    let savedOwner = localStorage.getItem(QUICK_OWNER_KEY);
+    if (savedOwner && !owners.includes(savedOwner)) {
+      localStorage.removeItem(QUICK_OWNER_KEY);
+      savedOwner = '';
     }
 
-    function setSelectValue(id, value) {
+    if (!selectedOwner && savedOwner) {
+      window.location.href = `/quick?owner=${encodeURIComponent(savedOwner)}`;
+      return;
+    }
+    if (selectedOwner) {
+      localStorage.setItem(QUICK_OWNER_KEY, selectedOwner);
+    }
+
+    const savedPlayer = getSelectedQueueId();
+    setSelectValue('quickPlayerSelect', savedPlayer);
+    setSelectValue('quickPlayerSelectTop', savedPlayer);
+
+    const ready = Boolean(selectedOwner && savedPlayer);
+    document.getElementById('quickSetup').hidden = ready;
+    document.getElementById('quickApp').hidden = !ready;
+  }
+
+  function wireSelects() {
+    for (const id of ['quickOwnerSelect', 'quickOwnerSelectTop']) {
       const el = document.getElementById(id);
-      if (el) el.value = value || '';
-    }
-
-    function getSelectedQueueId() {
-      const queueId = localStorage.getItem(QUICK_PLAYER_KEY);
-      if (!queueId) return null;
-      if (!quickData.players.includes(queueId)) {
-        localStorage.removeItem(QUICK_PLAYER_KEY);
-        return null;
-      }
-      return queueId;
-    }
-
-    function syncQuickState() {
-      const owners = quickData.owners || [];
-      const selectedOwner = quickData.selected_owner || '';
-      let savedOwner = localStorage.getItem(QUICK_OWNER_KEY);
-      if (savedOwner && !owners.includes(savedOwner)) {
-        localStorage.removeItem(QUICK_OWNER_KEY);
-        savedOwner = '';
-      }
-
-      if (!selectedOwner && savedOwner) {
-        window.location.href = `/quick?owner=${encodeURIComponent(savedOwner)}`;
-        return;
-      }
-      if (selectedOwner) {
-        localStorage.setItem(QUICK_OWNER_KEY, selectedOwner);
-      }
-
-      const savedPlayer = getSelectedQueueId();
-      setSelectValue('quickPlayerSelect', savedPlayer);
-      setSelectValue('quickPlayerSelectTop', savedPlayer);
-
-      const ready = Boolean(selectedOwner && savedPlayer);
-      document.getElementById('quickSetup').hidden = ready;
-      document.getElementById('quickApp').hidden = !ready;
-    }
-
-    function wireSelects() {
-      for (const id of ['quickOwnerSelect', 'quickOwnerSelectTop']) {
-        const el = document.getElementById(id);
-        if (!el) continue;
-        el.addEventListener('change', () => {
-          if (!el.value) {
-            localStorage.removeItem(QUICK_OWNER_KEY);
-            window.location.href = '/quick';
-            return;
-          }
-          localStorage.setItem(QUICK_OWNER_KEY, el.value);
-          window.location.href = `/quick?owner=${encodeURIComponent(el.value)}`;
-        });
-      }
-
-      for (const id of ['quickPlayerSelect', 'quickPlayerSelectTop']) {
-        const el = document.getElementById(id);
-        if (!el) continue;
-        el.addEventListener('change', () => {
-          if (el.value) localStorage.setItem(QUICK_PLAYER_KEY, el.value);
-          else localStorage.removeItem(QUICK_PLAYER_KEY);
-          setSelectValue('quickPlayerSelect', el.value);
-          setSelectValue('quickPlayerSelectTop', el.value);
-          syncQuickState();
-        });
-      }
-    }
-
-    async function playQuickMedia(uri, title) {
-      const queueId = getSelectedQueueId();
-      if (!queueId) {
-        showToast('Choisis une enceinte avant de lancer la lecture.', 'error');
-        syncQuickState();
-        return;
-      }
-      try {
-        const params = new URLSearchParams({queue_id: queueId, uri});
-        const resp = await fetch(`/api/v1/ma/play?${params.toString()}`, {method: 'POST'});
-        if (resp.ok) {
-          showToast(`Lecture lancée : ${title}`, 'success');
-        } else {
-          const err = await resp.json().catch(() => ({}));
-          showToast('Erreur : ' + (err.detail || 'lecture impossible'), 'error');
+      if (!el) continue;
+      el.addEventListener('change', () => {
+        if (!el.value) {
+          localStorage.removeItem(QUICK_OWNER_KEY);
+          window.location.href = '/quick';
+          return;
         }
-      } catch (err) {
-        showToast('Erreur de connexion à Music Assistant.', 'error');
-      }
-    }
-
-    async function openQuickPanel(kind, mediaId, title) {
-      const panel = document.getElementById('quickPanel');
-      const body = document.getElementById('quickPanelBody');
-      document.getElementById('quickPanelTitle').textContent = title || 'Détail';
-      panel.hidden = false;
-      body.innerHTML = '<div class="quick-loading"><div class="spinner"></div></div>';
-      const suffix = kind === 'episodes' ? 'episodes' : 'chapters';
-      try {
-        const resp = await fetch(`/media/${encodeURIComponent(mediaId)}/${suffix}`);
-        if (!resp.ok) throw new Error('load failed');
-        body.innerHTML = await resp.text();
-        panel.scrollIntoView({behavior: 'smooth', block: 'start'});
-      } catch (err) {
-        body.innerHTML = '<div class="quick-empty"><i class="mdi mdi-alert-circle-outline"></i><p>Impossible de charger la liste.</p></div>';
-      }
-    }
-
-    function closeQuickPanel() {
-      document.getElementById('quickPanel').hidden = true;
-      document.getElementById('quickPanelBody').innerHTML = '';
-    }
-
-    async function playEpisode(uri) {
-      await playQuickMedia(uri, 'épisode');
-    }
-
-    async function playChapter(uri, startSec, isResume) {
-      const queueId = getSelectedQueueId();
-      if (!queueId) {
-        showToast('Choisis une enceinte avant de lancer la lecture.', 'error');
-        syncQuickState();
-        return;
-      }
-      try {
-        const params = new URLSearchParams({queue_id: queueId, uri});
-        if (startSec && startSec > 0) params.set('seek', startSec);
-        const resp = await fetch(`/api/v1/ma/play?${params.toString()}`, {method: 'POST'});
-        if (resp.ok) {
-          showToast(isResume ? 'Reprise de la lecture.' : 'Lecture lancée.', 'success');
-        } else {
-          const err = await resp.json().catch(() => ({}));
-          showToast('Erreur : ' + (err.detail || 'lecture impossible'), 'error');
-        }
-      } catch (err) {
-        showToast('Erreur de connexion à Music Assistant.', 'error');
-      }
-    }
-
-    function filterEpisodes(q) {
-      filterRows(q, '#quickPanel .episode-row', 'episode-empty-filter', 'episode-count');
-    }
-
-    function filterChapters(q) {
-      filterRows(q, '#quickPanel .chapter-row', 'chapter-empty-filter', 'chapter-count');
-    }
-
-    function filterRows(q, selector, emptyId, countId) {
-      const term = (q || '').trim().toLowerCase();
-      const rows = document.querySelectorAll(selector);
-      let visible = 0;
-      rows.forEach(row => {
-        const match = !term || (row.dataset.name || '').includes(term);
-        row.style.display = match ? '' : 'none';
-        if (match) visible++;
+        localStorage.setItem(QUICK_OWNER_KEY, el.value);
+        window.location.href = `/quick?owner=${encodeURIComponent(el.value)}`;
       });
-      const empty = document.getElementById(emptyId);
-      if (empty) empty.style.display = rows.length && !visible ? '' : 'none';
-      const count = document.getElementById(countId);
-      if (count) count.textContent = term ? `(${visible}/${rows.length})` : `(${rows.length})`;
     }
 
-    document.addEventListener('DOMContentLoaded', () => {
-      wireSelects();
+    for (const id of ['quickPlayerSelect', 'quickPlayerSelectTop']) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      el.addEventListener('change', () => {
+        if (el.value) localStorage.setItem(QUICK_PLAYER_KEY, el.value);
+        else localStorage.removeItem(QUICK_PLAYER_KEY);
+        setSelectValue('quickPlayerSelect', el.value);
+        setSelectValue('quickPlayerSelectTop', el.value);
+        syncQuickState();
+      });
+    }
+  }
+
+  async function playQuickMedia(uri, title) {
+    const queueId = getSelectedQueueId();
+    if (!queueId) {
+      showToast('Choisis une enceinte avant de lancer la lecture.', 'error');
       syncQuickState();
+      return;
+    }
+    try {
+      const params = new URLSearchParams({queue_id: queueId, uri});
+      const resp = await fetch(`/api/v1/ma/play?${params.toString()}`, {method: 'POST'});
+      if (resp.ok) {
+        showToast(`Lecture lancée : ${title}`, 'success');
+      } else {
+        const err = await resp.json().catch(() => ({}));
+        showToast('Erreur : ' + (err.detail || 'lecture impossible'), 'error');
+      }
+    } catch (err) {
+      showToast('Erreur de connexion à Music Assistant.', 'error');
+    }
+  }
+
+  async function openQuickPanel(kind, mediaId, title) {
+    const panel = document.getElementById('quickPanel');
+    const body = document.getElementById('quickPanelBody');
+    document.getElementById('quickPanelTitle').textContent = title || 'Détail';
+    panel.hidden = false;
+    body.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
+    const suffix = kind === 'episodes' ? 'episodes' : 'chapters';
+    try {
+      const resp = await fetch(`/media/${encodeURIComponent(mediaId)}/${suffix}`);
+      if (!resp.ok) throw new Error('load failed');
+      body.innerHTML = await resp.text();
+      panel.scrollIntoView({behavior: 'smooth', block: 'start'});
+    } catch (err) {
+      body.innerHTML = '<div class="empty-state"><i class="mdi mdi-alert-circle-outline"></i><p>Impossible de charger la liste.</p></div>';
+    }
+  }
+
+  function closeQuickPanel() {
+    document.getElementById('quickPanel').hidden = true;
+    document.getElementById('quickPanelBody').innerHTML = '';
+  }
+
+  async function playEpisode(uri) {
+    await playQuickMedia(uri, 'épisode');
+  }
+
+  async function playChapter(uri, startSec, isResume) {
+    const queueId = getSelectedQueueId();
+    if (!queueId) {
+      showToast('Choisis une enceinte avant de lancer la lecture.', 'error');
+      syncQuickState();
+      return;
+    }
+    try {
+      const params = new URLSearchParams({queue_id: queueId, uri});
+      if (startSec && startSec > 0) params.set('seek', startSec);
+      const resp = await fetch(`/api/v1/ma/play?${params.toString()}`, {method: 'POST'});
+      if (resp.ok) {
+        showToast(isResume ? 'Reprise de la lecture.' : 'Lecture lancée.', 'success');
+      } else {
+        const err = await resp.json().catch(() => ({}));
+        showToast('Erreur : ' + (err.detail || 'lecture impossible'), 'error');
+      }
+    } catch (err) {
+      showToast('Erreur de connexion à Music Assistant.', 'error');
+    }
+  }
+
+  function filterEpisodes(q) {
+    filterRows(q, '#quickPanel .episode-row', 'episode-empty-filter', 'episode-count');
+  }
+
+  function filterChapters(q) {
+    filterRows(q, '#quickPanel .chapter-row', 'chapter-empty-filter', 'chapter-count');
+  }
+
+  function filterRows(q, selector, emptyId, countId) {
+    const term = (q || '').trim().toLowerCase();
+    const rows = document.querySelectorAll(selector);
+    let visible = 0;
+    rows.forEach(row => {
+      const match = !term || (row.dataset.name || '').includes(term);
+      row.style.display = match ? '' : 'none';
+      if (match) visible++;
     });
-  </script>
-</body>
-</html>
+    const empty = document.getElementById(emptyId);
+    if (empty) empty.style.display = rows.length && !visible ? '' : 'none';
+    const count = document.getElementById(countId);
+    if (count) count.textContent = term ? `(${visible}/${rows.length})` : `(${rows.length})`;
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    wireSelects();
+    syncQuickState();
+  });
+</script>
+{% endblock %}

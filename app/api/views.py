@@ -231,6 +231,7 @@ async def quick_launcher(
 
     return templates.TemplateResponse(request, "quick/index.html", _base_ctx(
         request,
+        active_nav="quick",
         items=items,
         owners=owners,
         selected_owner=selected_owner,
