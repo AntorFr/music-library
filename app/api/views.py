@@ -12,22 +12,18 @@ import math
 from typing import Any
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.media import MediaType
 from app.schemas.media import MediaCreate, MediaUpdate
-from app.services import cover_service, media_service
-from app.services import rfid_service
+from app.services import cover_service, media_service, rfid_service
 from app.services.tag_service import (
     create_tag,
-    get_cat_labels,
-    get_tag,
     list_tag_categories,
     list_tags,
-    get_cat_colors,
 )
 
 logger = logging.getLogger(__name__)
@@ -172,6 +168,77 @@ async def rfid_upsert(
 # ---------------------------------------------------------------------------
 # Home / Dashboard
 # ---------------------------------------------------------------------------
+
+
+@router.get("/manifest.webmanifest")
+async def web_manifest():
+    """Minimal PWA manifest for the quick launcher."""
+    return JSONResponse(
+        {
+            "name": "Music Library",
+            "short_name": "Music",
+            "description": "Lanceur rapide familial pour Music Library",
+            "start_url": "/quick",
+            "scope": "/",
+            "display": "standalone",
+            "background_color": "#181818",
+            "theme_color": "#03a9f4",
+            "icons": [
+                {
+                    "src": "/static/img/logo.svg",
+                    "sizes": "any",
+                    "type": "image/svg+xml",
+                    "purpose": "any maskable",
+                }
+            ],
+        },
+        media_type="application/manifest+json",
+    )
+
+
+@router.get("/quick", response_class=HTMLResponse)
+async def quick_launcher(
+    request: Request,
+    owner: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    owner_tags = await list_tags(db, category="owner")
+    owners = sorted({t.value for t in owner_tags}, key=str.casefold)
+    selected_owner = owner if owner in owners else None
+
+    items = []
+    if selected_owner:
+        items, _ = await media_service.list_media(
+            db,
+            tag_filters={"owner": selected_owner},
+            page=1,
+            page_size=500,
+        )
+
+    players = []
+    try:
+        from app.services.music_assistant import get_ma_client
+        ma = await get_ma_client()
+        players = [p.to_dict() for p in await ma.get_players()]
+    except Exception as exc:
+        logger.info("Quick launcher: Music Assistant players unavailable: %s", exc)
+
+    quick_data = {
+        "owners": owners,
+        "players": [p.get("player_id") for p in players if p.get("player_id")],
+        "selected_owner": selected_owner,
+    }
+
+    return templates.TemplateResponse(request, "quick/index.html", _base_ctx(
+        request,
+        items=items,
+        owners=owners,
+        selected_owner=selected_owner,
+        invalid_owner=owner if owner and not selected_owner else None,
+        players=players,
+        quick_data=quick_data,
+    ))
+
 
 @router.get("/", response_class=HTMLResponse)
 async def home(request: Request, db: AsyncSession = Depends(get_db)):
