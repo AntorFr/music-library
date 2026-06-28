@@ -226,6 +226,8 @@ class MusicAssistantClient:
         self._server_info: dict[str, Any] | None = None
         # Pending futures keyed by message_id — allows concurrent commands
         self._pending: dict[str, asyncio.Future[Any]] = {}
+        # Partial result chunks keyed by message_id. MA sends these for async generators.
+        self._partial_results: dict[str, list[Any]] = {}
         self._reader_task: asyncio.Task | None = None
         self._write_lock = asyncio.Lock()  # protect ws.send only (fast)
         self._connect_lock = asyncio.Lock()  # prevent concurrent reconnect
@@ -257,7 +259,24 @@ class MusicAssistantClient:
                     continue
                 msg_id = data.get("message_id")
                 if msg_id and msg_id in self._pending:
+                    if data.get("partial"):
+                        result = data.get("result")
+                        chunks = self._partial_results.setdefault(msg_id, [])
+                        if isinstance(result, list):
+                            chunks.extend(result)
+                        elif result is not None:
+                            chunks.append(result)
+                        continue
+
                     fut = self._pending.pop(msg_id)
+                    chunks = self._partial_results.pop(msg_id, None)
+                    if chunks is not None:
+                        result = data.get("result")
+                        if isinstance(result, list):
+                            chunks.extend(result)
+                        elif result is not None:
+                            chunks.append(result)
+                        data = {**data, "result": chunks}
                     if not fut.done():
                         fut.set_result(data)
         except websockets.ConnectionClosed as exc:
@@ -270,6 +289,7 @@ class MusicAssistantClient:
                 if not fut.done():
                     fut.set_exception(ConnectionError("MA WebSocket connection lost"))
             self._pending.clear()
+            self._partial_results.clear()
             self._ws = None
             logger.info("MA reader loop exited")
 
@@ -289,6 +309,7 @@ class MusicAssistantClient:
             if self._reader_task and not self._reader_task.done():
                 self._reader_task.cancel()
             self._pending.clear()
+            self._partial_results.clear()
 
             logger.info("Connecting to Music Assistant at %s", self.ws_url)
             self._ws = await websockets.connect(self.ws_url)
@@ -387,6 +408,7 @@ class MusicAssistantClient:
             response = await asyncio.wait_for(fut, timeout=60.0)
         except asyncio.TimeoutError:
             self._pending.pop(message_id, None)
+            self._partial_results.pop(message_id, None)
             raise TimeoutError(f"MA command '{command}' timed out after 60s")
 
         if "error_code" in response:
