@@ -7,9 +7,12 @@ Provides stable local URLs for ESPHome and the frontend.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import logging
+import secrets
 from io import BytesIO
 from pathlib import Path
+from urllib.parse import quote
 
 import httpx
 from PIL import Image
@@ -17,6 +20,12 @@ from PIL import Image
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Key used to sign thumbnail proxy URLs (see `sign_thumb`). A configured secret keeps links
+# valid across restarts; otherwise a random per-process key is fine — the cache is ephemeral
+# and links are regenerated each session. Resolved once at import (stable within a process,
+# and shared by every app served from that process).
+_THUMB_KEY = (settings.thumb_signing_key or secrets.token_hex(32)).encode("utf-8")
 
 
 def _ensure_covers_dir() -> Path:
@@ -160,13 +169,37 @@ async def ensure_local_cover(media_id: str, cover_url: str | None) -> str | None
     return await download_and_save_cover(media_id, cover_url)
 
 
-# --- Episode thumbnail proxy cache ------------------------------------------------------
+# --- Thumbnail proxy cache --------------------------------------------------------------
 #
-# Episode artwork lives behind an upstream image proxy (Music Assistant imageproxy or
-# weserv). Embedded clients can't hit those directly without paying a slow TLS handshake to
-# a third-party host on every image — enough to starve the device's main loop. Instead we
-# fetch each thumbnail once, cache a resized JPEG keyed by a hash of the source URL, and let
-# the device pull it from us (fast, plaintext-friendly, cached).
+# Episode / now-playing artwork lives on the music provider's CDN (or behind the Music
+# Assistant imageproxy). Embedded clients can't hit those directly without paying a slow TLS
+# handshake to a third-party host on every image — enough to starve the device's main loop —
+# and we'd rather not depend on a third-party resizer either. Instead we fetch each image
+# once, resize it ourselves, cache the JPEG (keyed by a hash of the source URL + size), and
+# let the device pull it from us (fast, plaintext-friendly, cached).
+#
+# The source URL can be any host, so we don't allow-list hosts; instead the proxy URL carries
+# an HMAC signature (`sign_thumb`) and the endpoint refuses anything we didn't sign — closing
+# the open-proxy / SSRF hole without a list to maintain.
+
+
+def sign_thumb(src_url: str, size: int) -> str:
+    """HMAC signature binding a source URL to a size (hex, truncated)."""
+    msg = f"{src_url}|{size}".encode("utf-8")
+    return hmac.new(_THUMB_KEY, msg, hashlib.sha256).hexdigest()[:16]
+
+
+def verify_thumb(src_url: str, size: int, sig: str) -> bool:
+    """Constant-time check that `sig` was produced by us for this (src, size)."""
+    return hmac.compare_digest(sign_thumb(src_url, size), sig or "")
+
+
+def thumb_proxy_url(base: str, src_url: str | None, size: int) -> str | None:
+    """Build a signed `/api/v1/quick/thumb` URL for a source image (None if no source)."""
+    if not src_url:
+        return None
+    sig = sign_thumb(src_url, size)
+    return f"{base}/api/v1/quick/thumb?src={quote(src_url, safe='')}&size={size}&sig={sig}"
 
 
 def _thumb_variant_path(src_url: str, size: int) -> Path:
@@ -214,7 +247,8 @@ async def get_or_make_thumb(src_url: str, size: int) -> Path | None:
 
     Returns the cached file on a hit; otherwise downloads `src_url`, resizes to a square
     `size`, caches it, and returns it. Returns None on download/decode failure (the caller
-    falls back to the default cover). Host allow-listing is the caller's responsibility.
+    falls back to the default cover). The caller is responsible for authorising `src_url`
+    (the endpoint verifies an HMAC signature — see `verify_thumb`).
     """
     variant = _thumb_variant_path(src_url, size)
     if variant.exists():

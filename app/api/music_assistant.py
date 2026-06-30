@@ -7,7 +7,7 @@ and playing media on MA players.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -16,6 +16,9 @@ from app.services import cover_service, media_service
 from app.services.music_assistant import MusicAssistantClient, get_ma_client
 
 router = APIRouter(prefix="/api/v1/ma", tags=["music-assistant"])
+
+# Square size (px) for the embedded now-playing cover, served via our signed thumbnail proxy.
+NOW_PLAYING_THUMB_PX = 300
 
 
 # ---------------------------------------------------------------------------
@@ -371,6 +374,7 @@ async def ma_power(
 
 @router.get("/now_playing", response_model=NowPlaying)
 async def ma_now_playing(
+    request: Request,
     queue_id: str = Query(...),
     ma: MusicAssistantClient = Depends(get_ma_client),
 ):
@@ -379,6 +383,13 @@ async def ma_now_playing(
         data = await ma.get_now_playing(queue_id)
     except Exception as exc:
         raise HTTPException(503, detail=f"Music Assistant indisponible: {exc}") from exc
+
+    # Serve the cover through our own signed, cached proxy (we resize it) so the device
+    # fetches it from us instead of the provider's CDN.
+    base = str(request.base_url).rstrip("/")
+    data["cover_url"] = cover_service.thumb_proxy_url(
+        base, data.get("cover_url"), NOW_PLAYING_THUMB_PX
+    )
     return NowPlaying(**data)
 
 
