@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,11 +14,19 @@ router = APIRouter(tags=["covers"])
 
 
 @router.get("/covers/{media_id}.jpg")
-async def get_cover(media_id: str, db: AsyncSession = Depends(get_db)):
+async def get_cover(
+    media_id: str,
+    size: int | None = Query(
+        None, ge=16, le=512, description="Square size in px (resized variant for small screens)"
+    ),
+    db: AsyncSession = Depends(get_db),
+):
     """
     Serve a cover image as a static file.
 
-    Stable URL for ESPHome: `http://host:8000/covers/{media_id}.jpg`
+    Stable URL for ESPHome: `http://host:8000/covers/{media_id}.jpg`. Pass `?size=N` to get a
+    cached NxN variant (resized from the base) — lets embedded screens fetch covers already at
+    the display size instead of scaling on-device.
 
     If the local file is missing but a cover_url exists in the database,
     re-downloads it automatically (self-healing cache).
@@ -38,6 +46,11 @@ async def get_cover(media_id: str, db: AsyncSession = Depends(get_db)):
     if not path:
         default = settings.default_cover
         return FileResponse(default, media_type="image/jpeg")
+
+    if size is not None:
+        resized = cover_service.get_or_make_resized(media_id, size)
+        if resized is not None:
+            path = resized
 
     return FileResponse(
         path,

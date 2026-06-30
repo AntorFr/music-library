@@ -59,6 +59,7 @@ async def download_and_save_cover(
         img = img.convert("RGB")
         img = img.resize((size, size), Image.Resampling.LANCZOS)
         img.save(local_path, "JPEG", quality=85, optimize=True)
+        clear_resized(media_id)  # base changed -> drop stale resized variants
         logger.info("Saved cover for media %s → %s", media_id, local_path)
         return f"covers/{media_id}.jpg"
     except Exception as exc:
@@ -91,6 +92,7 @@ async def save_cover_from_bytes(
         img = img.convert("RGB")
         img = img.resize((size, size), Image.Resampling.LANCZOS)
         img.save(local_path, "JPEG", quality=85, optimize=True)
+        clear_resized(media_id)  # base changed -> drop stale resized variants
         return f"covers/{media_id}.jpg"
     except Exception as exc:
         logger.warning("Failed to process uploaded cover: %s", exc)
@@ -101,6 +103,40 @@ def get_cover_path(media_id: str) -> Path | None:
     """Return the local file path for a cover if it exists."""
     path = settings.covers_dir / f"{media_id}.jpg"
     return path if path.exists() else None
+
+
+def _resized_path(media_id: str, size: int) -> Path:
+    return settings.covers_dir / f"{media_id}_{size}.jpg"
+
+
+def clear_resized(media_id: str) -> None:
+    """Drop cached resized variants (call when the base cover changes)."""
+    for p in settings.covers_dir.glob(f"{media_id}_*.jpg"):
+        try:
+            p.unlink()
+        except OSError:
+            pass
+
+
+def get_or_make_resized(media_id: str, size: int) -> Path | None:
+    """Return a cached NxN variant of the base cover, generating it on first request.
+
+    Lets embedded clients (ESPHome) fetch covers already at the display size — no client-side
+    scaling (sharper, less RAM/CPU on the device). Returns None if the base cover is missing.
+    """
+    base = get_cover_path(media_id)
+    if base is None:
+        return None
+    variant = _resized_path(media_id, size)
+    if variant.exists():
+        return variant
+    try:
+        img = Image.open(base).convert("RGB").resize((size, size), Image.Resampling.LANCZOS)
+        img.save(variant, "JPEG", quality=85, optimize=True)
+        return variant
+    except Exception as exc:
+        logger.warning("Failed to resize cover %s @ %dpx: %s", media_id, size, exc)
+        return None
 
 
 async def ensure_local_cover(media_id: str, cover_url: str | None) -> str | None:
@@ -129,3 +165,4 @@ def delete_cover(media_id: str) -> None:
     if path.exists():
         path.unlink()
         logger.info("Deleted cover for media %s", media_id)
+    clear_resized(media_id)
