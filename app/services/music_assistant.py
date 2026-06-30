@@ -720,7 +720,9 @@ class MusicAssistantClient:
             out["artist"] = ", ".join(a.get("name", "") for a in artists if a.get("name")) or None
             images = (media_item.get("metadata") or {}).get("images") or []
             if images:
-                out["cover_url"] = self.get_image_url(MAImage(images[0]), size=300)
+                # Original URL (size=0, no third-party resizer): the now-playing endpoint
+                # wraps it in our own signed thumbnail proxy for embedded clients.
+                out["cover_url"] = self.get_image_url(MAImage(images[0]), size=0)
 
         if player:
             out["volume"] = player.volume_level

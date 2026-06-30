@@ -51,15 +51,25 @@ async def test_admin_writes_blocked(esp_client: AsyncClient, path: str):
     assert (await esp_client.post(path)).status_code == 404
 
 
-async def test_thumb_rejects_disallowed_host(esp_client: AsyncClient):
+async def test_thumb_rejects_missing_or_bad_signature(esp_client: AsyncClient):
+    # No signature, and a forged one, are both refused — any host, no allow-list needed.
     r = await esp_client.get(
-        "/api/v1/quick/thumb", params={"src": "https://evil.example.com/x.jpg"}
+        "/api/v1/quick/thumb", params={"src": "https://evil.example.com/x.jpg", "size": 96}
+    )
+    assert r.status_code == 422  # `sig` is required
+    r = await esp_client.get(
+        "/api/v1/quick/thumb",
+        params={"src": "https://evil.example.com/x.jpg", "size": 96, "sig": "deadbeef"},
     )
     assert r.status_code == 403
 
 
-async def test_thumb_allows_weserv_host_is_in_allowlist():
-    assert "images.weserv.nl" in settings.thumb_hosts
+def test_thumb_signature_roundtrip():
+    src, size = "https://i.scdn.co/image/abc", 96
+    sig = cover_service.sign_thumb(src, size)
+    assert cover_service.verify_thumb(src, size, sig)
+    assert not cover_service.verify_thumb(src, size, "deadbeef")
+    assert not cover_service.verify_thumb(src, size + 1, sig)  # bound to size
 
 
 def test_thumbnail_cache_lru_eviction(tmp_path: Path, monkeypatch):
