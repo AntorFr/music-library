@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.schemas.media import NowPlaying
 from app.services import cover_service, media_service
 from app.services.music_assistant import MusicAssistantClient, get_ma_client
 
@@ -222,6 +223,163 @@ async def ma_play(
     except Exception as exc:
         raise HTTPException(500, detail=f"Erreur de lecture: {exc}")
     return {"status": "ok", "queue_id": queue_id, "uri": uri, "seek": seek}
+
+
+# ---------------------------------------------------------------------------
+# Transport & playback controls — the standard HA media_player command set,
+# so the embedded UI can mirror it (shuffle, repeat, volume, etc.).
+# ---------------------------------------------------------------------------
+
+async def _cmd(awaitable, label: str):
+    """Await an MA command, mapping failures to a 500."""
+    try:
+        await awaitable
+    except Exception as exc:
+        raise HTTPException(500, detail=f"Erreur {label}: {exc}") from exc
+    return {"status": "ok"}
+
+
+@router.post("/pause")
+async def ma_pause(
+    queue_id: str = Query(...),
+    ma: MusicAssistantClient = Depends(get_ma_client),
+):
+    """Pause the queue."""
+    return await _cmd(ma.pause(queue_id), "pause")
+
+
+@router.post("/resume")
+async def ma_resume(
+    queue_id: str = Query(...),
+    ma: MusicAssistantClient = Depends(get_ma_client),
+):
+    """Resume the queue (does not change the current item)."""
+    return await _cmd(ma.play(queue_id), "resume")
+
+
+@router.post("/play_pause")
+async def ma_play_pause(
+    queue_id: str = Query(...),
+    ma: MusicAssistantClient = Depends(get_ma_client),
+):
+    """Toggle play/pause."""
+    return await _cmd(ma.play_pause(queue_id), "play_pause")
+
+
+@router.post("/stop")
+async def ma_stop(
+    queue_id: str = Query(...),
+    ma: MusicAssistantClient = Depends(get_ma_client),
+):
+    """Stop the queue."""
+    return await _cmd(ma.stop(queue_id), "stop")
+
+
+@router.post("/next")
+async def ma_next(
+    queue_id: str = Query(...),
+    ma: MusicAssistantClient = Depends(get_ma_client),
+):
+    """Skip to the next item."""
+    return await _cmd(ma.next_track(queue_id), "next")
+
+
+@router.post("/previous")
+async def ma_previous(
+    queue_id: str = Query(...),
+    ma: MusicAssistantClient = Depends(get_ma_client),
+):
+    """Go to the previous item."""
+    return await _cmd(ma.previous_track(queue_id), "previous")
+
+
+@router.post("/seek")
+async def ma_seek(
+    queue_id: str = Query(...),
+    position: int = Query(..., ge=0, description="Position en secondes"),
+    ma: MusicAssistantClient = Depends(get_ma_client),
+):
+    """Seek the current item to an absolute position (seconds)."""
+    return await _cmd(ma.seek(queue_id, position), "seek")
+
+
+@router.post("/shuffle")
+async def ma_shuffle(
+    queue_id: str = Query(...),
+    enabled: bool = Query(..., description="Activer/désactiver l'aléatoire"),
+    ma: MusicAssistantClient = Depends(get_ma_client),
+):
+    """Enable/disable shuffle."""
+    return await _cmd(ma.set_shuffle(queue_id, enabled), "shuffle")
+
+
+@router.post("/repeat")
+async def ma_repeat(
+    queue_id: str = Query(...),
+    mode: str = Query(..., description="off | one | all"),
+    ma: MusicAssistantClient = Depends(get_ma_client),
+):
+    """Set repeat mode (off | one | all)."""
+    if mode not in ("off", "one", "all"):
+        raise HTTPException(422, detail="mode doit être off | one | all")
+    return await _cmd(ma.set_repeat(queue_id, mode), "repeat")
+
+
+@router.post("/volume")
+async def ma_volume(
+    queue_id: str = Query(...),
+    level: int = Query(..., ge=0, le=100, description="Volume absolu 0..100"),
+    ma: MusicAssistantClient = Depends(get_ma_client),
+):
+    """Set absolute volume (0..100). queue_id is used as the player id."""
+    return await _cmd(ma.set_volume(queue_id, level), "volume")
+
+
+@router.post("/volume_step")
+async def ma_volume_step(
+    queue_id: str = Query(...),
+    direction: str = Query(..., description="up | down"),
+    ma: MusicAssistantClient = Depends(get_ma_client),
+):
+    """Step the volume up or down."""
+    if direction == "up":
+        return await _cmd(ma.volume_up(queue_id), "volume_up")
+    if direction == "down":
+        return await _cmd(ma.volume_down(queue_id), "volume_down")
+    raise HTTPException(422, detail="direction doit être up | down")
+
+
+@router.post("/mute")
+async def ma_mute(
+    queue_id: str = Query(...),
+    muted: bool = Query(...),
+    ma: MusicAssistantClient = Depends(get_ma_client),
+):
+    """Mute/unmute the player."""
+    return await _cmd(ma.set_mute(queue_id, muted), "mute")
+
+
+@router.post("/power")
+async def ma_power(
+    queue_id: str = Query(...),
+    powered: bool = Query(...),
+    ma: MusicAssistantClient = Depends(get_ma_client),
+):
+    """Power the player on/off."""
+    return await _cmd(ma.set_power(queue_id, powered), "power")
+
+
+@router.get("/now_playing", response_model=NowPlaying)
+async def ma_now_playing(
+    queue_id: str = Query(...),
+    ma: MusicAssistantClient = Depends(get_ma_client),
+):
+    """Compact playback state of a queue (for the embedded now-playing widget)."""
+    try:
+        data = await ma.get_now_playing(queue_id)
+    except Exception as exc:
+        raise HTTPException(503, detail=f"Music Assistant indisponible: {exc}") from exc
+    return NowPlaying(**data)
 
 
 # ---------------------------------------------------------------------------

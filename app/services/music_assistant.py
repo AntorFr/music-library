@@ -594,6 +594,141 @@ class MusicAssistantClient:
             "player_queues/seek", queue_id=queue_id, position=int(position)
         )
 
+    # --- High-level: Transport & playback controls (queue-level) ---
+
+    async def play(self, queue_id: str) -> None:
+        """Resume playback of the queue."""
+        await self._send_command("player_queues/play", queue_id=queue_id)
+
+    async def pause(self, queue_id: str) -> None:
+        """Pause the queue."""
+        await self._send_command("player_queues/pause", queue_id=queue_id)
+
+    async def play_pause(self, queue_id: str) -> None:
+        """Toggle play/pause."""
+        await self._send_command("player_queues/play_pause", queue_id=queue_id)
+
+    async def stop(self, queue_id: str) -> None:
+        """Stop the queue."""
+        await self._send_command("player_queues/stop", queue_id=queue_id)
+
+    async def next_track(self, queue_id: str) -> None:
+        """Skip to the next item."""
+        await self._send_command("player_queues/next", queue_id=queue_id)
+
+    async def previous_track(self, queue_id: str) -> None:
+        """Go to the previous item."""
+        await self._send_command("player_queues/previous", queue_id=queue_id)
+
+    async def set_shuffle(self, queue_id: str, enabled: bool) -> None:
+        """Enable/disable shuffle on the queue."""
+        await self._send_command(
+            "player_queues/shuffle", queue_id=queue_id, shuffle_enabled=bool(enabled)
+        )
+
+    async def set_repeat(self, queue_id: str, mode: str) -> None:
+        """Set repeat mode: off | one | all."""
+        await self._send_command(
+            "player_queues/repeat", queue_id=queue_id, repeat_mode=mode
+        )
+
+    # --- High-level: Player controls (player-level; player_id == queue_id in MA) ---
+
+    async def set_volume(self, player_id: str, level: int) -> None:
+        """Set absolute volume (0..100)."""
+        level = max(0, min(100, int(level)))
+        await self._send_command(
+            "players/cmd/volume_set", player_id=player_id, volume_level=level
+        )
+
+    async def volume_up(self, player_id: str) -> None:
+        """Step the volume up."""
+        await self._send_command("players/cmd/volume_up", player_id=player_id)
+
+    async def volume_down(self, player_id: str) -> None:
+        """Step the volume down."""
+        await self._send_command("players/cmd/volume_down", player_id=player_id)
+
+    async def set_mute(self, player_id: str, muted: bool) -> None:
+        """Mute/unmute the player."""
+        await self._send_command(
+            "players/cmd/volume_mute", player_id=player_id, muted=bool(muted)
+        )
+
+    async def set_power(self, player_id: str, powered: bool) -> None:
+        """Power the player on/off."""
+        await self._send_command(
+            "players/cmd/power", player_id=player_id, powered=bool(powered)
+        )
+
+    # --- High-level: Now-playing state ---
+
+    async def get_queue(self, queue_id: str) -> dict | None:
+        """Return the raw queue dict for queue_id, or None if not found."""
+        for q in await self.get_player_queues():
+            if q.get("queue_id") == queue_id:
+                return q
+        return None
+
+    async def get_now_playing(self, queue_id: str) -> dict:
+        """Build a compact now-playing snapshot for a queue.
+
+        Combines the queue (current item, state, shuffle, repeat, elapsed) with the
+        matching player (volume, mute, power). Best-effort: MA field shapes vary, so every
+        lookup is defensive and falls back to None.
+        """
+        queue = await self.get_queue(queue_id)
+        player = None
+        for p in await self.get_players():
+            if p.player_id == queue_id:
+                player = p
+                break
+
+        out: dict[str, Any] = {
+            "queue_id": queue_id,
+            "available": queue is not None,
+            "state": "idle",
+            "title": None,
+            "artist": None,
+            "cover_url": None,
+            "uri": None,
+            "duration_s": None,
+            "position_s": None,
+            "volume": None,
+            "muted": None,
+            "shuffle": None,
+            "repeat": None,
+            "powered": None,
+        }
+
+        if queue:
+            out["state"] = queue.get("state") or "idle"
+            out["shuffle"] = queue.get("shuffle_enabled")
+            out["repeat"] = queue.get("repeat_mode")
+            elapsed = queue.get("elapsed_time")
+            if elapsed is None:
+                elapsed = queue.get("corrected_elapsed_time")
+            out["position_s"] = int(elapsed) if elapsed is not None else None
+
+            cur = queue.get("current_item") or {}
+            media_item = cur.get("media_item") or {}
+            out["title"] = cur.get("name") or media_item.get("name")
+            out["uri"] = cur.get("uri") or media_item.get("uri")
+            dur = cur.get("duration") or media_item.get("duration")
+            out["duration_s"] = int(dur) if dur else None
+            artists = media_item.get("artists") or []
+            out["artist"] = ", ".join(a.get("name", "") for a in artists if a.get("name")) or None
+            images = (media_item.get("metadata") or {}).get("images") or []
+            if images:
+                out["cover_url"] = self.get_image_url(MAImage(images[0]), size=300)
+
+        if player:
+            out["volume"] = player.volume_level
+            out["powered"] = player.powered
+            out["muted"] = player._raw.get("volume_muted")
+
+        return out
+
     # --- Image URLs ---
 
     def get_image_url(self, image: MAImage | None, size: int = 0) -> str | None:
