@@ -6,7 +6,8 @@ services:
     image: ghcr.io/antorfr/music-library:latest
     container_name: music-library
     ports:
-      - "8000:8000"
+      - "8000:8000"   # full API + web frontend (front with HTTPS)
+      - "8001:8001"   # dedicated ESP API (fast internal / plaintext)
     volumes:
       - ./data:/app/data
     environment:

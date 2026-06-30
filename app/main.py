@@ -29,6 +29,7 @@ async def lifespan(app: FastAPI):
 
     # Ensure data directories exist
     settings.covers_dir.mkdir(parents=True, exist_ok=True)
+    settings.thumbs_dir.mkdir(parents=True, exist_ok=True)
 
     # Init database tables
     await init_db()

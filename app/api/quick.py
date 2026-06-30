@@ -10,9 +10,13 @@ constrained clients.
 
 from __future__ import annotations
 
+from urllib.parse import quote, urlparse
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.models.media import MediaType
 from app.schemas.media import (
@@ -21,13 +25,23 @@ from app.schemas.media import (
     QuickLaunchItem,
     QuickLaunchResponse,
 )
-from app.services import media_service
+from app.services import cover_service, media_service
 from app.services.music_assistant import MusicAssistantClient, get_ma_client
 
 router = APIRouter(prefix="/api/v1/quick", tags=["quick"])
 
 # Media types that require drilling into episodes/chapters before playback.
 _CHILD_TYPES = {MediaType.podcast, MediaType.audiobook}
+
+# Default square size (px) for episode thumbnails served through our proxy cache.
+EPISODE_THUMB_PX = 96
+
+
+def _thumb_proxy_url(base: str, src_url: str | None, size: int) -> str | None:
+    """Wrap an upstream image URL in our own cached `/thumb` proxy (None if no source)."""
+    if not src_url:
+        return None
+    return f"{base}/api/v1/quick/thumb?src={quote(src_url, safe='')}&size={size}"
 
 
 def _resolve_ma_provider_and_id(item) -> tuple[str | None, str | None]:
@@ -50,6 +64,34 @@ def _resolve_ma_provider_and_id(item) -> tuple[str | None, str | None]:
     extra = getattr(item, "metadata_extra", None) or {}
     item_id = str(extra["ma_item_id"]) if isinstance(extra, dict) and extra.get("ma_item_id") else None
     return provider, item_id
+
+
+@router.get("/thumb")
+async def quick_thumb(
+    src: str = Query(..., description="Upstream image URL to proxy (allow-listed hosts only)."),
+    size: int = Query(EPISODE_THUMB_PX, ge=16, le=512, description="Square size in px."),
+):
+    """Proxy + cache an episode thumbnail from the upstream image provider.
+
+    Embedded clients hit this on our own host instead of the slow upstream proxy
+    (weserv / Music Assistant imageproxy): the upstream fetch + resize happens here once,
+    and the cached NxN JPEG is served fast on every subsequent request. Sources are
+    restricted to `settings.thumb_hosts` to avoid turning this into an open proxy (SSRF).
+
+    Declared before `/{owner}` so the literal path wins over the catch-all segment.
+    """
+    host = (urlparse(src).hostname or "").lower()
+    if host not in settings.thumb_hosts:
+        raise HTTPException(403, detail="Source host not allowed")
+
+    path = await cover_service.get_or_make_thumb(src, size)
+    if path is None:
+        return FileResponse(settings.default_cover, media_type="image/jpeg")
+    return FileResponse(
+        path,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=604800"},
+    )
 
 
 @router.get("/{owner}", response_model=QuickLaunchResponse)
@@ -90,7 +132,7 @@ async def quick_favourites(
     return QuickLaunchResponse(owner=owner, count=len(out), items=out)
 
 
-async def _podcast_children(ma: MusicAssistantClient, item) -> list[QuickChildItem]:
+async def _podcast_children(ma: MusicAssistantClient, item, base: str) -> list[QuickChildItem]:
     provider, item_id = _resolve_ma_provider_and_id(item)
     if not provider or not item_id:
         ma_item = await ma.get_item_by_uri(item.source_uri or "")
@@ -98,11 +140,14 @@ async def _podcast_children(ma: MusicAssistantClient, item) -> list[QuickChildIt
     episodes = await ma.get_podcast_episodes(item_id, provider)
     out: list[QuickChildItem] = []
     for e in episodes:
+        # Route the thumbnail through our own cached proxy (see `/thumb`): the device fetches
+        # it from us, not from the slow upstream image proxy.
+        upstream = ma.get_item_image_url(e, size=EPISODE_THUMB_PX)
         out.append(
             QuickChildItem(
                 title=e.name,
                 uri=e.uri,
-                cover_url=ma.get_item_image_url(e, size=300),
+                cover_url=_thumb_proxy_url(base, upstream, EPISODE_THUMB_PX),
                 position=e.position or None,
                 duration_s=e.duration or None,
                 resume_s=(e.resume_position_ms // 1000) if e.resume_position_ms else None,
@@ -138,6 +183,7 @@ async def _audiobook_children(ma: MusicAssistantClient, item) -> list[QuickChild
 
 @router.get("/item/{media_id}/children", response_model=QuickChildrenResponse)
 async def quick_children(
+    request: Request,
     media_id: str,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
@@ -146,8 +192,8 @@ async def quick_children(
 ):
     """One page of a podcast's episodes / an audiobook's chapters (drill-down on scroll).
 
-    Episodes carry their own `uri` (+ optional thumbnail); chapters share the book `uri`
-    and carry a `seek` offset (and no thumbnail).
+    Episodes carry their own `uri` (+ optional thumbnail, served via our `/thumb` proxy);
+    chapters share the book `uri` and carry a `seek` offset (and no thumbnail).
     """
     item = await media_service.get_media(db, media_id)
     if not item:
@@ -155,9 +201,10 @@ async def quick_children(
     if item.media_type not in _CHILD_TYPES:
         raise HTTPException(400, detail="Ce média n'a pas d'épisodes/chapitres")
 
+    base = str(request.base_url).rstrip("/")
     try:
         if item.media_type == MediaType.podcast:
-            all_items = await _podcast_children(ma, item)
+            all_items = await _podcast_children(ma, item, base)
         else:
             all_items = await _audiobook_children(ma, item)
     except Exception as exc:
