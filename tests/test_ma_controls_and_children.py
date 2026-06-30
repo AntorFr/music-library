@@ -243,3 +243,22 @@ async def test_now_playing(client):
     assert data["shuffle"] is True
     assert data["repeat"] == "all"
     assert data["volume"] == 40
+
+
+def test_resolve_prefers_source_uri_over_provider():
+    """library://audiobook/29 must resolve to (library, 29), not (audible, 29)."""
+    from app.api.quick import _resolve_ma_provider_and_id
+
+    class It:
+        source_uri = "library://audiobook/29"
+        provider = "audible"  # origin provider — must NOT win over the source_uri scheme
+        metadata_extra = {"ma_item_id": "29"}
+
+    assert _resolve_ma_provider_and_id(It()) == ("library", "29")
+
+    class NoUri:
+        source_uri = ""
+        provider = "spotify"
+        metadata_extra = {"ma_item_id": "abc"}
+
+    assert _resolve_ma_provider_and_id(NoUri()) == ("spotify", "abc")

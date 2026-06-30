@@ -30,21 +30,25 @@ router = APIRouter(prefix="/api/v1/quick", tags=["quick"])
 _CHILD_TYPES = {MediaType.podcast, MediaType.audiobook}
 
 
-def _resolve_ma_provider_and_id(item, expected_kind: str) -> tuple[str | None, str | None]:
-    """Best-effort (provider, item_id) from a local media row (metadata then source_uri)."""
+def _resolve_ma_provider_and_id(item) -> tuple[str | None, str | None]:
+    """(provider, item_id) to re-query Music Assistant for an item's children.
+
+    Prefer the ``source_uri``: it is the canonical MA URI (e.g. ``library://audiobook/29``),
+    so its scheme is the MA provider and the trailing segment is the item id — a
+    self-consistent pair. The stored ``provider`` column can be the *origin* provider
+    (audible/spotify) while ``ma_item_id`` is the *library* id; combining those two is wrong
+    and makes MA look up a non-existent item. Fall back to provider + ma_item_id only when the
+    source_uri can't be parsed.
+    """
+    uri = item.source_uri or ""
+    if "://" in uri:
+        scheme, rest = uri.split("://", 1)
+        parts = rest.split("/", 1)
+        if len(parts) == 2 and parts[1]:
+            return scheme, parts[1]
     provider = (item.provider or "").strip() or None
-    item_id: str | None = None
     extra = getattr(item, "metadata_extra", None) or {}
-    if isinstance(extra, dict) and extra.get("ma_item_id"):
-        item_id = str(extra["ma_item_id"])
-    if not item_id:
-        uri = item.source_uri or ""
-        if "://" in uri:
-            scheme, rest = uri.split("://", 1)
-            parts = rest.split("/", 1)
-            if len(parts) == 2 and parts[0] == expected_kind:
-                provider = provider or scheme
-                item_id = parts[1]
+    item_id = str(extra["ma_item_id"]) if isinstance(extra, dict) and extra.get("ma_item_id") else None
     return provider, item_id
 
 
@@ -87,7 +91,7 @@ async def quick_favourites(
 
 
 async def _podcast_children(ma: MusicAssistantClient, item) -> list[QuickChildItem]:
-    provider, item_id = _resolve_ma_provider_and_id(item, "podcast")
+    provider, item_id = _resolve_ma_provider_and_id(item)
     if not provider or not item_id:
         ma_item = await ma.get_item_by_uri(item.source_uri or "")
         provider, item_id = ma_item.provider, ma_item.item_id
@@ -109,7 +113,7 @@ async def _podcast_children(ma: MusicAssistantClient, item) -> list[QuickChildIt
 
 
 async def _audiobook_children(ma: MusicAssistantClient, item) -> list[QuickChildItem]:
-    provider, item_id = _resolve_ma_provider_and_id(item, "audiobook")
+    provider, item_id = _resolve_ma_provider_and_id(item)
     if provider and item_id:
         ma_item = await ma.get_item("audiobook", item_id, provider)
     else:
