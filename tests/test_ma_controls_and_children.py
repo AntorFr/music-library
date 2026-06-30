@@ -144,12 +144,17 @@ async def test_children_podcast_paginated(client, db, fake_ma):
     e = data["items"][0]
     assert e["title"] == "Ep1"
     assert e["uri"] == "spotify://episode/e1"
-    # The upstream thumbnail URL (built at EPISODE_THUMB_PX) is wrapped in our cached
-    # `/thumb` proxy so the device fetches it from us, not from the upstream image proxy.
+    # The original image URL (size=0, no third-party resizer) is wrapped in our cached,
+    # signed `/thumb` proxy so the device fetches it from us and we resize it ourselves.
     from urllib.parse import quote
-    upstream = "thumb/spotify://episode/e1?s=96"
+
+    from app.api.quick import EPISODE_THUMB_PX
+    from app.services import cover_service
+
+    source = "thumb/spotify://episode/e1?s=0"
+    sig = cover_service.sign_thumb(source, EPISODE_THUMB_PX)
     assert e["cover_url"].endswith(
-        f"/api/v1/quick/thumb?src={quote(upstream, safe='')}&size=96"
+        f"/api/v1/quick/thumb?src={quote(source, safe='')}&size={EPISODE_THUMB_PX}&sig={sig}"
     )
     assert e["resume_s"] == 5
     assert e["seek"] is None
@@ -249,6 +254,12 @@ async def test_now_playing(client):
     assert data["shuffle"] is True
     assert data["repeat"] == "all"
     assert data["volume"] == 40
+    # The cover is served through our own signed thumbnail proxy, not the provider's CDN.
+    from app.api.music_assistant import NOW_PLAYING_THUMB_PX
+    from app.services import cover_service
+
+    assert "/api/v1/quick/thumb?src=" in data["cover_url"]
+    assert f"&sig={cover_service.sign_thumb('c', NOW_PLAYING_THUMB_PX)}" in data["cover_url"]
 
 
 def test_resolve_prefers_source_uri_over_provider():

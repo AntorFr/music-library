@@ -10,8 +10,6 @@ constrained clients.
 
 from __future__ import annotations
 
-from urllib.parse import quote, urlparse
-
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,13 +33,6 @@ _CHILD_TYPES = {MediaType.podcast, MediaType.audiobook}
 
 # Default square size (px) for episode thumbnails served through our proxy cache.
 EPISODE_THUMB_PX = 96
-
-
-def _thumb_proxy_url(base: str, src_url: str | None, size: int) -> str | None:
-    """Wrap an upstream image URL in our own cached `/thumb` proxy (None if no source)."""
-    if not src_url:
-        return None
-    return f"{base}/api/v1/quick/thumb?src={quote(src_url, safe='')}&size={size}"
 
 
 def _resolve_ma_provider_and_id(item) -> tuple[str | None, str | None]:
@@ -68,21 +59,22 @@ def _resolve_ma_provider_and_id(item) -> tuple[str | None, str | None]:
 
 @router.get("/thumb")
 async def quick_thumb(
-    src: str = Query(..., description="Upstream image URL to proxy (allow-listed hosts only)."),
+    src: str = Query(..., description="Source image URL to proxy (must carry a valid `sig`)."),
     size: int = Query(EPISODE_THUMB_PX, ge=16, le=512, description="Square size in px."),
+    sig: str = Query(..., description="HMAC signature issued by this server for (src, size)."),
 ):
-    """Proxy + cache an episode thumbnail from the upstream image provider.
+    """Proxy + cache artwork from the music provider's CDN (or the MA imageproxy).
 
-    Embedded clients hit this on our own host instead of the slow upstream proxy
-    (weserv / Music Assistant imageproxy): the upstream fetch + resize happens here once,
-    and the cached NxN JPEG is served fast on every subsequent request. Sources are
-    restricted to `settings.thumb_hosts` to avoid turning this into an open proxy (SSRF).
+    Embedded clients hit this on our own host instead of the original source: the fetch +
+    resize happens here once, and the cached NxN JPEG is served fast on every subsequent
+    request. We resize the image ourselves (no third-party resizer). The `sig` ensures only
+    URLs this server generated are honoured — so `src` may be any host without becoming an
+    open proxy (SSRF).
 
     Declared before `/{owner}` so the literal path wins over the catch-all segment.
     """
-    host = (urlparse(src).hostname or "").lower()
-    if host not in settings.thumb_hosts:
-        raise HTTPException(403, detail="Source host not allowed")
+    if not cover_service.verify_thumb(src, size, sig):
+        raise HTTPException(403, detail="Invalid or missing signature")
 
     path = await cover_service.get_or_make_thumb(src, size)
     if path is None:
@@ -141,13 +133,14 @@ async def _podcast_children(ma: MusicAssistantClient, item, base: str) -> list[Q
     out: list[QuickChildItem] = []
     for e in episodes:
         # Route the thumbnail through our own cached proxy (see `/thumb`): the device fetches
-        # it from us, not from the slow upstream image proxy.
-        upstream = ma.get_item_image_url(e, size=EPISODE_THUMB_PX)
+        # it from us, and we resize the original ourselves (size=0 = original, no third-party
+        # resizer) before caching.
+        source = ma.get_item_image_url(e, size=0)
         out.append(
             QuickChildItem(
                 title=e.name,
                 uri=e.uri,
-                cover_url=_thumb_proxy_url(base, upstream, EPISODE_THUMB_PX),
+                cover_url=cover_service.thumb_proxy_url(base, source, EPISODE_THUMB_PX),
                 position=e.position or None,
                 duration_s=e.duration or None,
                 resume_s=(e.resume_position_ms // 1000) if e.resume_position_ms else None,
