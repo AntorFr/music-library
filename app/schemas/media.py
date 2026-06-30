@@ -157,6 +157,50 @@ class QuickLaunchResponse(BaseModel):
     items: list[QuickLaunchItem] = Field(default_factory=list)
 
 
+class QuickChildItem(BaseModel):
+    """One episode/chapter of a podcast/audiobook, trimmed for an embedded list."""
+
+    title: str
+    uri: str                          # pass to /ma/play (with seek for a chapter)
+    cover_url: str | None = None      # podcast episode = thumbnail; audiobook chapter = none
+    seek: int | None = None           # start offset (s) — audiobook chapter into the book uri
+    position: int | None = None       # episode/chapter number
+    duration_s: int | None = None
+    resume_s: int | None = None       # saved resume position (s), if any
+    fully_played: bool | None = None
+
+
+class QuickChildrenResponse(BaseModel):
+    """One page of a podcast/audiobook's episodes/chapters (drill-down, paged on scroll)."""
+
+    parent_id: str
+    media_type: MediaType
+    offset: int
+    limit: int
+    count: int
+    has_more: bool
+    items: list[QuickChildItem] = Field(default_factory=list)
+
+
+class NowPlaying(BaseModel):
+    """Compact playback state of a target queue, for the embedded now-playing widget."""
+
+    queue_id: str
+    available: bool = False
+    state: str = "idle"               # playing | paused | idle | off
+    title: str | None = None
+    artist: str | None = None
+    cover_url: str | None = None
+    uri: str | None = None
+    duration_s: int | None = None
+    position_s: int | None = None
+    volume: int | None = None         # 0..100
+    muted: bool | None = None
+    shuffle: bool | None = None
+    repeat: str | None = None         # off | one | all
+    powered: bool | None = None
+
+
 # ---------------------------------------------------------------------------
 # Selection / query helpers
 # ---------------------------------------------------------------------------
