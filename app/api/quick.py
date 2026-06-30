@@ -10,18 +10,42 @@ constrained clients.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.media import MediaType
-from app.schemas.media import QuickLaunchItem, QuickLaunchResponse
+from app.schemas.media import (
+    QuickChildItem,
+    QuickChildrenResponse,
+    QuickLaunchItem,
+    QuickLaunchResponse,
+)
 from app.services import media_service
+from app.services.music_assistant import MusicAssistantClient, get_ma_client
 
 router = APIRouter(prefix="/api/v1/quick", tags=["quick"])
 
 # Media types that require drilling into episodes/chapters before playback.
 _CHILD_TYPES = {MediaType.podcast, MediaType.audiobook}
+
+
+def _resolve_ma_provider_and_id(item, expected_kind: str) -> tuple[str | None, str | None]:
+    """Best-effort (provider, item_id) from a local media row (metadata then source_uri)."""
+    provider = (item.provider or "").strip() or None
+    item_id: str | None = None
+    extra = getattr(item, "metadata_extra", None) or {}
+    if isinstance(extra, dict) and extra.get("ma_item_id"):
+        item_id = str(extra["ma_item_id"])
+    if not item_id:
+        uri = item.source_uri or ""
+        if "://" in uri:
+            scheme, rest = uri.split("://", 1)
+            parts = rest.split("/", 1)
+            if len(parts) == 2 and parts[0] == expected_kind:
+                provider = provider or scheme
+                item_id = parts[1]
+    return provider, item_id
 
 
 @router.get("/{owner}", response_model=QuickLaunchResponse)
@@ -60,3 +84,88 @@ async def quick_favourites(
         for m in items
     ]
     return QuickLaunchResponse(owner=owner, count=len(out), items=out)
+
+
+async def _podcast_children(ma: MusicAssistantClient, item) -> list[QuickChildItem]:
+    provider, item_id = _resolve_ma_provider_and_id(item, "podcast")
+    if not provider or not item_id:
+        ma_item = await ma.get_item_by_uri(item.source_uri or "")
+        provider, item_id = ma_item.provider, ma_item.item_id
+    episodes = await ma.get_podcast_episodes(item_id, provider)
+    out: list[QuickChildItem] = []
+    for e in episodes:
+        out.append(
+            QuickChildItem(
+                title=e.name,
+                uri=e.uri,
+                cover_url=ma.get_item_image_url(e, size=300),
+                position=e.position or None,
+                duration_s=e.duration or None,
+                resume_s=(e.resume_position_ms // 1000) if e.resume_position_ms else None,
+                fully_played=e.fully_played,
+            )
+        )
+    return out
+
+
+async def _audiobook_children(ma: MusicAssistantClient, item) -> list[QuickChildItem]:
+    provider, item_id = _resolve_ma_provider_and_id(item, "audiobook")
+    if provider and item_id:
+        ma_item = await ma.get_item("audiobook", item_id, provider)
+    else:
+        ma_item = await ma.get_item_by_uri(item.source_uri or "")
+    book_uri = ma_item.uri or item.source_uri or ""
+    out: list[QuickChildItem] = []
+    for ch in sorted(ma_item.chapters, key=lambda c: c.get("position", 0) or 0):
+        start = float(ch.get("start", 0) or 0)
+        end = ch.get("end")
+        end_f = float(end) if end is not None else None
+        out.append(
+            QuickChildItem(
+                title=ch.get("name") or f"Chapitre {ch.get('position', 0)}",
+                uri=book_uri,           # chapters share the book uri; seek selects the chapter
+                seek=int(start),
+                position=int(ch.get("position", 0) or 0),
+                duration_s=int(end_f - start) if end_f else None,
+            )
+        )
+    return out
+
+
+@router.get("/item/{media_id}/children", response_model=QuickChildrenResponse)
+async def quick_children(
+    media_id: str,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    ma: MusicAssistantClient = Depends(get_ma_client),
+):
+    """One page of a podcast's episodes / an audiobook's chapters (drill-down on scroll).
+
+    Episodes carry their own `uri` (+ optional thumbnail); chapters share the book `uri`
+    and carry a `seek` offset (and no thumbnail).
+    """
+    item = await media_service.get_media(db, media_id)
+    if not item:
+        raise HTTPException(404, detail="Média introuvable")
+    if item.media_type not in _CHILD_TYPES:
+        raise HTTPException(400, detail="Ce média n'a pas d'épisodes/chapitres")
+
+    try:
+        if item.media_type == MediaType.podcast:
+            all_items = await _podcast_children(ma, item)
+        else:
+            all_items = await _audiobook_children(ma, item)
+    except Exception as exc:
+        raise HTTPException(502, detail=f"Music Assistant: {exc}") from exc
+
+    page = all_items[offset : offset + limit]
+    return QuickChildrenResponse(
+        parent_id=item.id,
+        media_type=item.media_type,
+        offset=offset,
+        limit=limit,
+        count=len(page),
+        has_more=(offset + limit) < len(all_items),
+        items=page,
+    )
