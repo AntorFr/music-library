@@ -129,6 +129,35 @@ class MediaBrief(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Quick launch (embedded screens / ESPHome dashboards)
+# ---------------------------------------------------------------------------
+
+class QuickLaunchItem(BaseModel):
+    """Minimal favourite entry for an embedded cover-grid launcher.
+
+    Trimmed to what a microcontroller needs to render a tile and start
+    playback: ``uri`` goes straight to ``POST /api/v1/ma/play`` and
+    ``has_children`` flags podcasts/audiobooks that require an episode/chapter
+    drill-down before playing.
+    """
+
+    id: str
+    title: str
+    media_type: MediaType
+    uri: str
+    cover_url: str
+    has_children: bool
+
+
+class QuickLaunchResponse(BaseModel):
+    """Owner's favourites, ready for an embedded quick launcher."""
+
+    owner: str
+    count: int
+    items: list[QuickLaunchItem] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
 # Selection / query helpers
 # ---------------------------------------------------------------------------
 
