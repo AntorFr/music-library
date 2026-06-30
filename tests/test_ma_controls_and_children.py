@@ -144,7 +144,13 @@ async def test_children_podcast_paginated(client, db, fake_ma):
     e = data["items"][0]
     assert e["title"] == "Ep1"
     assert e["uri"] == "spotify://episode/e1"
-    assert e["cover_url"] == "thumb/spotify://episode/e1?s=300"
+    # The upstream thumbnail URL (built at EPISODE_THUMB_PX) is wrapped in our cached
+    # `/thumb` proxy so the device fetches it from us, not from the upstream image proxy.
+    from urllib.parse import quote
+    upstream = "thumb/spotify://episode/e1?s=96"
+    assert e["cover_url"].endswith(
+        f"/api/v1/quick/thumb?src={quote(upstream, safe='')}&size=96"
+    )
     assert e["resume_s"] == 5
     assert e["seek"] is None
     assert ("episodes", "p1", "spotify") in fake_ma.calls
