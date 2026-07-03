@@ -115,37 +115,75 @@ def get_cover_path(media_id: str) -> Path | None:
     return path if path.exists() else None
 
 
-def _resized_path(media_id: str, size: int) -> Path:
-    return settings.covers_dir / f"{media_id}_{size}.jpg"
+# Output encodings offered to embedded clients. JPEG is small on the wire but its DCT decode is
+# slow on the device's CPU (it can block the ESP main loop while decoding, stuttering the UI);
+# BMP is larger but decodes trivially (no DCT — a plain copy), keeping the loop free. We offer
+# both so the device can A/B which is best on a given screen/link. Keyed by the `fmt` query arg.
+_FORMATS: dict[str, tuple[str, str, str]] = {
+    # fmt: (Pillow format, file extension, MIME type)
+    "jpg": ("JPEG", ".jpg", "image/jpeg"),
+    "bmp": ("BMP", ".bmp", "image/bmp"),
+}
+
+
+def _fmt(fmt: str | None) -> tuple[str, str, str]:
+    """Resolve a requested `fmt` to (Pillow format, extension, MIME); defaults to JPEG."""
+    return _FORMATS.get((fmt or "jpg").lower(), _FORMATS["jpg"])
+
+
+def media_type_for(fmt: str | None) -> str:
+    """MIME type for a requested `fmt` (for the FileResponse)."""
+    return _fmt(fmt)[2]
+
+
+def _save(img: "Image.Image", path: Path, pil_fmt: str) -> None:
+    """Encode a PIL image to `path` in the given Pillow format (JPEG tuned; BMP is lossless)."""
+    if pil_fmt == "JPEG":
+        img.save(path, "JPEG", quality=85, optimize=True)
+    else:
+        img.save(path, pil_fmt)  # BMP: 24-bit, no DCT -> cheap to decode on the device
+
+
+def _resized_path(media_id: str, size: int, fmt: str = "jpg") -> Path:
+    return settings.covers_dir / f"{media_id}_{size}{_fmt(fmt)[1]}"
 
 
 def clear_resized(media_id: str) -> None:
-    """Drop cached resized variants (call when the base cover changes)."""
-    for p in settings.covers_dir.glob(f"{media_id}_*.jpg"):
-        try:
-            p.unlink()
-        except OSError:
-            pass
+    """Drop cached resized variants (call when the base cover changes) — every format."""
+    for _pil, ext, _mime in _FORMATS.values():
+        for p in settings.covers_dir.glob(f"{media_id}_*{ext}"):
+            try:
+                p.unlink()
+            except OSError:
+                pass
 
 
-def get_or_make_resized(media_id: str, size: int) -> Path | None:
-    """Return a cached NxN variant of the base cover, generating it on first request.
+def get_or_make_resized(media_id: str, size: int | None, fmt: str = "jpg") -> Path | None:
+    """Return a cached variant of the base cover (given size + format), building it on first use.
 
-    Lets embedded clients (ESPHome) fetch covers already at the display size — no client-side
-    scaling (sharper, less RAM/CPU on the device). Returns None if the base cover is missing.
+    Lets embedded clients (ESPHome) fetch covers already at the display size and in the encoding
+    that decodes fastest on their hardware — no client-side scaling. `size=None` keeps the base
+    resolution (only converts the format). Returns None if the base cover is missing.
     """
     base = get_cover_path(media_id)
     if base is None:
         return None
-    variant = _resized_path(media_id, size)
+    pil_fmt, ext, _ = _fmt(fmt)
+    # Fast path: base is already a native-size JPEG.
+    if size is None and pil_fmt == "JPEG":
+        return base
+    key = size if size is not None else "orig"
+    variant = settings.covers_dir / f"{media_id}_{key}{ext}"
     if variant.exists():
         return variant
     try:
-        img = Image.open(base).convert("RGB").resize((size, size), Image.Resampling.LANCZOS)
-        img.save(variant, "JPEG", quality=85, optimize=True)
+        img = Image.open(base).convert("RGB")
+        if size is not None:
+            img = img.resize((size, size), Image.Resampling.LANCZOS)
+        _save(img, variant, pil_fmt)
         return variant
     except Exception as exc:
-        logger.warning("Failed to resize cover %s @ %dpx: %s", media_id, size, exc)
+        logger.warning("Failed to make cover %s @ %s px (%s): %s", media_id, size, fmt, exc)
         return None
 
 
@@ -202,9 +240,9 @@ def thumb_proxy_url(base: str, src_url: str | None, size: int) -> str | None:
     return f"{base}/api/v1/quick/thumb?src={quote(src_url, safe='')}&size={size}&sig={sig}"
 
 
-def _thumb_variant_path(src_url: str, size: int) -> Path:
+def _thumb_variant_path(src_url: str, size: int, fmt: str = "jpg") -> Path:
     key = hashlib.sha256(src_url.encode("utf-8")).hexdigest()[:32]
-    return settings.thumbs_dir / f"{key}_{size}.jpg"
+    return settings.thumbs_dir / f"{key}_{size}{_fmt(fmt)[1]}"
 
 
 def _enforce_thumb_cache_limit() -> None:
@@ -219,7 +257,9 @@ def _enforce_thumb_cache_limit() -> None:
 
     entries: list[tuple[float, int, Path]] = []
     total = 0
-    for p in settings.thumbs_dir.glob("*.jpg"):
+    for p in settings.thumbs_dir.iterdir():
+        if not p.is_file():
+            continue
         try:
             st = p.stat()
         except OSError:
@@ -242,15 +282,18 @@ def _enforce_thumb_cache_limit() -> None:
     logger.info("Thumbnail cache trimmed to %d bytes (cap %d)", total, max_bytes)
 
 
-async def get_or_make_thumb(src_url: str, size: int) -> Path | None:
-    """Fetch an external image once, cache an NxN JPEG variant, return its path.
+async def get_or_make_thumb(src_url: str, size: int, fmt: str = "jpg") -> Path | None:
+    """Fetch an external image once, cache an NxN variant (given format), return its path.
 
     Returns the cached file on a hit; otherwise downloads `src_url`, resizes to a square
-    `size`, caches it, and returns it. Returns None on download/decode failure (the caller
-    falls back to the default cover). The caller is responsible for authorising `src_url`
-    (the endpoint verifies an HMAC signature — see `verify_thumb`).
+    `size`, encodes it as `fmt` (jpg|bmp), caches it, and returns it. Returns None on
+    download/decode failure (the caller falls back to the default cover). The caller is
+    responsible for authorising `src_url` (the endpoint verifies an HMAC signature — see
+    `verify_thumb`). `fmt` is not signed: it only picks the output encoding of an
+    already-authorised source, so it can't widen the SSRF surface.
     """
-    variant = _thumb_variant_path(src_url, size)
+    pil_fmt, _ext, _mime = _fmt(fmt)
+    variant = _thumb_variant_path(src_url, size, fmt)
     if variant.exists():
         return variant
 
@@ -267,7 +310,7 @@ async def get_or_make_thumb(src_url: str, size: int) -> Path | None:
         img = Image.open(BytesIO(raw_bytes)).convert("RGB")
         img = img.resize((size, size), Image.Resampling.LANCZOS)
         settings.thumbs_dir.mkdir(parents=True, exist_ok=True)
-        img.save(variant, "JPEG", quality=85, optimize=True)
+        _save(img, variant, pil_fmt)
         _enforce_thumb_cache_limit()
         return variant
     except Exception as exc:
