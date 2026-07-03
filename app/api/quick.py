@@ -62,26 +62,34 @@ async def quick_thumb(
     src: str = Query(..., description="Source image URL to proxy (must carry a valid `sig`)."),
     size: int = Query(EPISODE_THUMB_PX, ge=16, le=512, description="Square size in px."),
     sig: str = Query(..., description="HMAC signature issued by this server for (src, size)."),
+    fmt: str = Query(
+        "jpg", pattern="^(jpg|bmp)$",
+        description="Output encoding: jpg (small) or bmp (no-DCT, cheap to decode on-device).",
+    ),
 ):
     """Proxy + cache artwork from the music provider's CDN (or the MA imageproxy).
 
     Embedded clients hit this on our own host instead of the original source: the fetch +
-    resize happens here once, and the cached NxN JPEG is served fast on every subsequent
+    resize happens here once, and the cached NxN variant is served fast on every subsequent
     request. We resize the image ourselves (no third-party resizer). The `sig` ensures only
     URLs this server generated are honoured — so `src` may be any host without becoming an
     open proxy (SSRF).
+
+    `fmt` (jpg|bmp) is deliberately NOT part of the signature: it only selects the output
+    encoding of an already-authorised `src`+`size`, so a client can append `&fmt=bmp` to a
+    signed URL (to trade transfer size for a cheaper on-device decode) without re-signing.
 
     Declared before `/{owner}` so the literal path wins over the catch-all segment.
     """
     if not cover_service.verify_thumb(src, size, sig):
         raise HTTPException(403, detail="Invalid or missing signature")
 
-    path = await cover_service.get_or_make_thumb(src, size)
+    path = await cover_service.get_or_make_thumb(src, size, fmt)
     if path is None:
         return FileResponse(settings.default_cover, media_type="image/jpeg")
     return FileResponse(
         path,
-        media_type="image/jpeg",
+        media_type=cover_service.media_type_for(fmt),
         headers={"Cache-Control": "public, max-age=604800"},
     )
 
