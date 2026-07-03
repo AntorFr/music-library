@@ -19,6 +19,10 @@ async def get_cover(
     size: int | None = Query(
         None, ge=16, le=512, description="Square size in px (resized variant for small screens)"
     ),
+    fmt: str = Query(
+        "jpg", pattern="^(jpg|bmp)$",
+        description="Output encoding: jpg (small) or bmp (no-DCT, cheap to decode on-device).",
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -26,7 +30,9 @@ async def get_cover(
 
     Stable URL for ESPHome: `http://host:8000/covers/{media_id}.jpg`. Pass `?size=N` to get a
     cached NxN variant (resized from the base) — lets embedded screens fetch covers already at
-    the display size instead of scaling on-device.
+    the display size instead of scaling on-device. Pass `?fmt=bmp` to get an (uncompressed) BMP
+    instead of JPEG: bigger on the wire but its decode is a plain copy (no DCT), which keeps a
+    low-power client's UI loop from stalling while decoding — the device can A/B which wins.
 
     If the local file is missing but a cover_url exists in the database,
     re-downloads it automatically (self-healing cache).
@@ -47,14 +53,15 @@ async def get_cover(
         default = settings.default_cover
         return FileResponse(default, media_type="image/jpeg")
 
-    if size is not None:
-        resized = cover_service.get_or_make_resized(media_id, size)
-        if resized is not None:
-            path = resized
+    # Any non-JPEG request (or a resize) goes through the variant builder/cache.
+    if size is not None or fmt != "jpg":
+        variant = cover_service.get_or_make_resized(media_id, size, fmt)
+        if variant is not None:
+            path = variant
 
     return FileResponse(
         path,
-        media_type="image/jpeg",
+        media_type=cover_service.media_type_for(fmt),
         headers={"Cache-Control": "public, max-age=86400"},
     )
 
