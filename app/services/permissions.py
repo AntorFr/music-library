@@ -23,8 +23,17 @@ def media_owner_values(item) -> set[str]:
     }
 
 
-def can_access_media(user: CurrentUser, item) -> bool:
-    """View/edit rule: a child only reaches media carrying their owner tag."""
+def can_view_media(user: CurrentUser, item) -> bool:
+    """View rule: a child sees media carrying their own tag or a group tag."""
+    keys = user.view_owner_keys
+    return keys is None or bool(keys & media_owner_values(item))
+
+
+def can_edit_media(user: CurrentUser, item) -> bool:
+    """Edit rule: a child only modifies media carrying their OWN owner tag.
+
+    Group-shared media (``owner:famille``…) stay visible but read-only for them.
+    """
     return user.owner_value is None or user.owner_value in media_owner_values(item)
 
 
@@ -34,8 +43,15 @@ def ensure_media_access(user: CurrentUser, item) -> None:
     Out-of-scope media answers 404 (not 403) so a child cannot probe the
     existence of other people's items.
     """
-    if item is None or not can_access_media(user, item):
+    if item is None or not can_view_media(user, item):
         raise HTTPException(404, detail="Média introuvable")
+
+
+def ensure_media_edit(user: CurrentUser, item) -> None:
+    """404 when invisible, 403 when visible but not theirs to modify."""
+    ensure_media_access(user, item)
+    if not can_edit_media(user, item):
+        raise HTTPException(403, detail="Média partagé — modification réservée aux parents")
 
 
 def ensure_parent(user: CurrentUser) -> None:

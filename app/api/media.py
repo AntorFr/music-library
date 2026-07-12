@@ -22,7 +22,7 @@ from app.schemas.media import (
 )
 from app.services import media_service
 from app.services.auth_service import CurrentUser, get_current_user
-from app.services.permissions import ensure_media_access
+from app.services.permissions import ensure_media_access, ensure_media_edit
 from app.services.select_engine import build_simple_group, parse_tag_filters_from_qsl, split_csv
 
 router = APIRouter(prefix="/api/v1/media", tags=["media"])
@@ -61,7 +61,7 @@ async def list_media(
         tag_filters=tag_filters if tag_filters else None,
         page=page,
         page_size=page_size,
-        owner_scope=user.owner_value,
+        owner_scope=user.view_owner_keys,
     )
     return PaginatedResponse(
         items=[MediaRead.model_validate(i) for i in items],
@@ -145,7 +145,7 @@ async def select_media(
         group=group,
         options=options,
         include_order=parsed.include_order,
-        owner_scope=user.owner_value,
+        owner_scope=user.view_owner_keys,
     )
 
     base = str(request.base_url).rstrip("/")
@@ -224,7 +224,7 @@ async def select_media_query(
         group=payload.query,
         options=payload.options,
         include_order=include_order,
-        owner_scope=user.owner_value,
+        owner_scope=user.view_owner_keys,
     )
 
     base = str(request.base_url).rstrip("/")
@@ -273,7 +273,7 @@ async def update_media(
 ):
     """Update a media item (partial update)."""
     existing = await media_service.get_media(db, media_id)
-    ensure_media_access(user, existing)
+    ensure_media_edit(user, existing)
     item = await media_service.update_media(
         db, media_id, data, force_owner_value=user.owner_value
     )
@@ -291,7 +291,7 @@ async def delete_media(
 ):
     """Delete a media item (soft delete by default)."""
     existing = await media_service.get_media(db, media_id)
-    ensure_media_access(user, existing)
+    ensure_media_edit(user, existing)
     ok = await media_service.delete_media(db, media_id, hard=hard)
     if not ok:
         raise HTTPException(404, detail="Média introuvable")

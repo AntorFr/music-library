@@ -10,7 +10,7 @@ from app.config import settings
 from app.database import get_db
 from app.services import cover_service, media_service
 from app.services.auth_service import CurrentUser, get_current_user
-from app.services.permissions import ensure_media_access
+from app.services.permissions import ensure_media_edit
 
 router = APIRouter(tags=["covers"])
 
@@ -77,7 +77,7 @@ async def upload_cover(
 ):
     """Upload a cover image for a media item."""
     media = await media_service.get_media(db, media_id)
-    ensure_media_access(user, media)
+    ensure_media_edit(user, media)
 
     content = await file.read()
     local_path = await cover_service.save_cover_from_bytes(media_id, content)

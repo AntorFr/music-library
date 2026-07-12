@@ -10,11 +10,17 @@ Le rôle est dérivé du claim `groups` (scopes `openid profile email groups`) :
 | Rôle | Condition | Droits |
 |---|---|---|
 | **parent** | membre du groupe `ML_OIDC_ADMIN_GROUP` (défaut `parents`) | tout voir / tout modifier |
-| **enfant** | tout autre utilisateur authentifié | voir uniquement les médias portant son tag `owner`, en ajouter (tag appliqué d'office), modifier/supprimer les siens |
+| **enfant** | tout autre utilisateur authentifié | voir les médias de son tag `owner` **et des tags de ses groupes**, en ajouter (son tag appliqué d'office), modifier/supprimer **les siens** |
 
-Le lien utilisateur ↔ médias repose sur une convention : le **username** Authelia
-de l'enfant correspond (insensible à la casse **et aux accents**) à la **valeur de
-son tag `owner`** (ex. user `zoe` ↔ tag `owner:Zoé`).
+Le lien utilisateur ↔ médias repose sur une convention (insensible à la casse
+**et aux accents**) :
+
+- le **username** Authelia ↔ la valeur de son tag `owner` (ex. user `zoe`
+  ↔ tag `owner:Zoé`) — c'est le périmètre **d'écriture** de l'enfant ;
+- chaque **groupe** Authelia de l'utilisateur ↔ un tag `owner` partagé (ex.
+  groupes `famille`, `enfants` ↔ tags `owner:famille`, `owner:enfants`) —
+  s'ajoute à son périmètre de **lecture** uniquement : un média partagé est
+  visible mais reste en lecture seule pour lui (403 en modification).
 
 Garde-fous côté enfant :
 

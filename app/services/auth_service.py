@@ -55,6 +55,7 @@ class CurrentUser:
     username: str
     display_name: str
     role: Role
+    groups: tuple[str, ...] = ()
 
     @property
     def is_parent(self) -> bool:
@@ -62,8 +63,27 @@ class CurrentUser:
 
     @property
     def owner_value(self) -> str | None:
-        """Normalised owner-tag key a child is scoped to (``None`` = unrestricted)."""
+        """Normalised owner-tag key a child can WRITE to (``None`` = unrestricted).
+
+        A child's creations get this tag, and only media carrying it are
+        editable by them.
+        """
         return None if self.is_parent else normalize_owner(self.username)
+
+    @property
+    def view_owner_keys(self) -> frozenset[str] | None:
+        """Normalised owner-tag keys a child can SEE (``None`` = unrestricted).
+
+        Their own tag plus their IdP groups: a group name matching an owner tag
+        (accent/case-insensitive) shares that tag's media with the whole group
+        (e.g. groups ``famille``/``enfants`` ↔ tags ``owner:famille`` /
+        ``owner:enfants``).
+        """
+        if self.is_parent:
+            return None
+        return frozenset(
+            {normalize_owner(self.username), *(normalize_owner(g) for g in self.groups)}
+        )
 
 
 #: Identity used when OIDC is not configured (local development).
@@ -87,13 +107,18 @@ def user_from_claims(claims: dict) -> CurrentUser:
     """Derive the application identity from OIDC claims (userinfo)."""
     username = str(claims.get("preferred_username") or claims.get("sub") or "").strip()
     display_name = str(claims.get("name") or username)
-    groups = claims.get("groups") or []
+    groups = tuple(str(g) for g in (claims.get("groups") or []))
     role: Role = "parent" if settings.oidc_admin_group in groups else "child"
-    return CurrentUser(username=username, display_name=display_name, role=role)
+    return CurrentUser(username=username, display_name=display_name, role=role, groups=groups)
 
 
 def user_to_session(user: CurrentUser) -> dict:
-    return {"username": user.username, "display_name": user.display_name, "role": user.role}
+    return {
+        "username": user.username,
+        "display_name": user.display_name,
+        "role": user.role,
+        "groups": list(user.groups),
+    }
 
 
 def user_from_session(data: object) -> CurrentUser | None:
@@ -103,10 +128,12 @@ def user_from_session(data: object) -> CurrentUser | None:
     role = data.get("role")
     if not username or role not in ("parent", "child"):
         return None
+    groups = data.get("groups") or []
     return CurrentUser(
         username=str(username),
         display_name=str(data.get("display_name") or username),
         role=role,
+        groups=tuple(str(g) for g in groups) if isinstance(groups, list) else (),
     )
 
 

@@ -23,6 +23,7 @@ from app.services import cover_service, media_service, rfid_service
 from app.services.auth_service import get_current_user, normalize_owner
 from app.services.permissions import (
     ensure_media_access,
+    ensure_media_edit,
     ensure_parent,
     is_own_owner_tag,
 )
@@ -218,10 +219,12 @@ async def quick_launcher(
     user = get_current_user(request)
     owner_tags = await list_tags(db, category="owner")
     owners = sorted({t.value for t in owner_tags}, key=str.casefold)
-    if user.owner_value is not None:
-        # A child only gets their own launcher — no owner picker.
-        owners = [o for o in owners if normalize_owner(o) == user.owner_value]
-        owner = owners[0] if owners else None
+    if user.view_owner_keys is not None:
+        # A child's picker only offers their own tag + their group tags.
+        owners = [o for o in owners if normalize_owner(o) in user.view_owner_keys]
+        if owner not in owners:
+            own = [o for o in owners if normalize_owner(o) == user.owner_value]
+            owner = own[0] if own else (owners[0] if owners else None)
     selected_owner = owner if owner in owners else None
 
     items = []
@@ -262,7 +265,7 @@ async def quick_launcher(
 @router.get("/", response_class=HTMLResponse)
 async def home(request: Request, db: AsyncSession = Depends(get_db)):
     user = get_current_user(request)
-    scope = user.owner_value
+    scope = user.view_owner_keys
 
     # Stats
     all_items, total = await media_service.list_media(db, page=1, page_size=1, owner_scope=scope)
@@ -335,13 +338,13 @@ async def media_list(
         db, search=search, media_type=mt, provider=provider,
         tag_filters=tag_filters or None,
         page=page, page_size=page_size,
-        owner_scope=user.owner_value,
+        owner_scope=user.view_owner_keys,
     )
     pages = math.ceil(total / page_size) if total else 0
 
     # Distinct providers for filter dropdown
     all_items_for_providers, _ = await media_service.list_media(
-        db, page=1, page_size=500, owner_scope=user.owner_value
+        db, page=1, page_size=500, owner_scope=user.view_owner_keys
     )
     providers = sorted(set(i.provider for i in all_items_for_providers))
 
@@ -697,7 +700,7 @@ async def media_add_tag(
 
     user = get_current_user(request)
     existing = await media_service.get_media(db, media_id)
-    ensure_media_access(user, existing)
+    ensure_media_edit(user, existing)
 
     item = await media_service.add_tag_to_media(db, media_id, category, value)
     if not item:
@@ -739,7 +742,7 @@ async def media_remove_tag(
     """Remove a tag from a media item and return the updated tags block partial."""
     user = get_current_user(request)
     existing = await media_service.get_media(db, media_id)
-    ensure_media_access(user, existing)
+    ensure_media_edit(user, existing)
     target = next((t for t in existing.tags if t.id == tag_id), None)
     if target is not None and is_own_owner_tag(user, target):
         raise HTTPException(403, detail="Impossible de retirer son propre tag propriétaire")
@@ -779,7 +782,7 @@ async def media_remove_tag(
 @router.get("/media/{media_id}/edit", response_class=HTMLResponse)
 async def media_edit_form(request: Request, media_id: str, db: AsyncSession = Depends(get_db)):
     item = await media_service.get_media(db, media_id)
-    ensure_media_access(get_current_user(request), item)
+    ensure_media_edit(get_current_user(request), item)
     all_tags = await list_tags(db)
     categories = await list_tag_categories(db)
     cat_labels = {c.slug: c.label for c in categories}
@@ -822,7 +825,7 @@ async def media_update(
     )
     user = get_current_user(request)
     existing = await media_service.get_media(db, media_id)
-    ensure_media_access(user, existing)
+    ensure_media_edit(user, existing)
     item = await media_service.update_media(
         db, media_id, data, force_owner_value=user.owner_value
     )

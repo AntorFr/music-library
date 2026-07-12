@@ -71,9 +71,10 @@ def _session_cookie(user: dict) -> str:
     return TimestampSigner(str(secret)).sign(payload).decode()
 
 
-def _login_child(client: AsyncClient, username: str = "lea") -> None:
+def _login_child(client: AsyncClient, username: str = "lea", groups: list[str] | None = None) -> None:
     client.cookies.set("session", _session_cookie(
-        {"username": username, "display_name": username.capitalize(), "role": "child"}
+        {"username": username, "display_name": username.capitalize(), "role": "child",
+         "groups": groups or []}
     ))
 
 
@@ -343,3 +344,36 @@ async def test_child_create_reuses_accented_owner_tag(
     owner_tags = [t["value"] for t in response.json()["tags"] if t["category"] == "owner"]
     # The existing accented tag is reused — no lowercase twin created.
     assert owner_tags == ["Zoé"]
+
+
+# ---------------------------------------------------------------------------
+# Group tags: a child also sees media shared through their IdP groups
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_child_sees_group_shared_media(client: AsyncClient, db: AsyncSession, oidc_on):
+    _login_child(client, "Léo", groups=["enfants", "famille"])
+    await _create_media(db, title="Le sien", owner="Léo", uri="spotify://playlist/t")
+    await _create_media(db, title="Partagé", owner="famille", uri="spotify://playlist/f")
+    await _create_media(db, title="Des petits", owner="enfants", uri="spotify://playlist/e")
+    await _create_media(db, title="Rock papa", owner="papa", uri="spotify://playlist/p")
+
+    response = await client.get("/api/v1/media")
+    assert response.status_code == 200
+    titles = {i["title"] for i in response.json()["items"]}
+    assert titles == {"Le sien", "Partagé", "Des petits"}
+
+
+@pytest.mark.asyncio
+async def test_child_cannot_edit_group_shared_media(
+    client: AsyncClient, db: AsyncSession, oidc_on
+):
+    _login_child(client, "Léo", groups=["famille"])
+    shared = await _create_media(db, title="Partagé", owner="famille", uri="spotify://playlist/f")
+
+    # Visible…
+    assert (await client.get(f"/api/v1/media/{shared.id}")).status_code == 200
+    # …but read-only for the child: 403, not 404.
+    response = await client.put(f"/api/v1/media/{shared.id}", json={"title": "Pwned"})
+    assert response.status_code == 403
+    assert (await client.delete(f"/api/v1/media/{shared.id}")).status_code == 403

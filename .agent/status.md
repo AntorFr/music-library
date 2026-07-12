@@ -2,10 +2,11 @@
 
 > MàJ : 2026-07-12
 
-**État :** v0.18.0 — auth OIDC (Authelia) + rôles parents/enfants livrés côté app
-(scope owner en SQL, auto-tag à la création, gardes d'écriture, UI adaptée,
-53 tests verts). Reste le câblage infra (client OIDC Authelia, comptes enfants,
-values Helm) et le token HA.
+**État :** v0.19.0 — auth OIDC (Authelia) + rôles parents/enfants côté app :
+scope owner en SQL (tag username + tags des groupes en lecture, écriture sur
+son tag seul), auto-tag à la création, matching accents/casse, UI adaptée,
+57 tests verts. Reste le câblage infra (client OIDC, comptes enfants, values
+Helm) et le token HA.
 
 **Prochaines étapes :**
 - [ ] Déclarer le client OIDC `music-library` dans Authelia + comptes enfants (usernames = valeurs de tags owner)

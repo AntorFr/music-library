@@ -120,7 +120,7 @@ async def quick_favourites(
         tag_filters={"owner": owner},
         page=1,
         page_size=limit,
-        owner_scope=user.owner_value,
+        owner_scope=user.view_owner_keys,
     )
 
     base = str(request.base_url).rstrip("/")

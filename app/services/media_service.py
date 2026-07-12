@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import uuid
 import random
+from collections.abc import Collection
 from typing import Any
 
 from sqlalchemy import func, or_, select
@@ -75,19 +76,20 @@ async def _get_or_create_tag(
     return tag
 
 
-async def _matching_owner_tag_ids(db: AsyncSession, owner_scope: str) -> list[int]:
-    """Ids of the owner tags matching a normalised owner key.
+async def _matching_owner_tag_ids(db: AsyncSession, owner_keys: Collection[str]) -> list[int]:
+    """Ids of the owner tags matching a set of normalised owner keys.
 
     Matching is accent- and case-insensitive ("zoe" ↔ tag "Zoé"), which
     SQLite cannot do natively — so the (small) owner tag list is matched in
     Python.
     """
+    keys = {normalize_owner(k) for k in owner_keys}
     result = await db.execute(
         select(Tag.id, Tag.value).where(Tag.category == OWNER_CATEGORY)
     )
     return [
         tag_id for tag_id, value in result.all()
-        if normalize_owner(value or "") == normalize_owner(owner_scope)
+        if normalize_owner(value or "") in keys
     ]
 
 
@@ -98,20 +100,21 @@ async def get_or_create_owner_tag(db: AsyncSession, owner_value: str) -> Tag:
     accented/capitalised ("Zoé") — reuse the existing tag instead of
     creating a twin.
     """
-    tag_ids = await _matching_owner_tag_ids(db, owner_value)
+    tag_ids = await _matching_owner_tag_ids(db, [owner_value])
     if tag_ids:
         result = await db.execute(select(Tag).where(Tag.id == tag_ids[0]))
         return result.scalar_one()
     return await _get_or_create_tag(db, OWNER_CATEGORY, owner_value)
 
 
-async def _apply_owner_scope(db: AsyncSession, stmt, owner_scope: str | None):
-    """Restrict a Media select to items carrying the owner tag (child sessions).
+async def _apply_owner_scope(db: AsyncSession, stmt, owner_scope: Collection[str] | None):
+    """Restrict a Media select to items carrying one of the owner tags a child
+    session may see (their own tag + their group tags).
 
     This constraint is mandatory — it is applied at the SQL layer and is never
     relaxed by the selection fallback logic. No matching owner tag ⇒ no rows.
     """
-    if owner_scope:
+    if owner_scope is not None:
         tag_ids = await _matching_owner_tag_ids(db, owner_scope)
         stmt = stmt.where(
             Media.id.in_(
@@ -253,7 +256,7 @@ async def list_media(
     is_active: bool = True,
     page: int = 1,
     page_size: int = 50,
-    owner_scope: str | None = None,
+    owner_scope: Collection[str] | None = None,
 ) -> tuple[list[Media], int]:
     """
     List media with filtering, search, and pagination.
@@ -474,7 +477,7 @@ async def select_media_by_query(
     group: TagQueryGroup,
     options: MediaSelectQueryOptions,
     include_order: list[str] | None = None,
-    owner_scope: str | None = None,
+    owner_scope: Collection[str] | None = None,
 ) -> list[Media]:
     """Select media items using a boolean tag query group + HA-friendly options.
 
