@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.schemas.media import TagCategoryCreate, TagCategoryRead, TagCreate, TagRead
 from app.services import tag_service
+from app.services.auth_service import CurrentUser, get_current_user
+from app.services.permissions import ensure_parent
 
 router = APIRouter(prefix="/api/v1/tags", tags=["tags"])
 
@@ -27,8 +29,13 @@ async def list_categories(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/categories", response_model=TagCategoryRead, status_code=201)
-async def create_category(data: TagCategoryCreate, db: AsyncSession = Depends(get_db)):
-    """Create a new tag category."""
+async def create_category(
+    data: TagCategoryCreate,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Create a new tag category (parents only)."""
+    ensure_parent(user)
     existing = await tag_service.get_tag_category(db, data.slug)
     if existing:
         raise HTTPException(409, detail=f"La catégorie '{data.slug}' existe déjà")
@@ -37,8 +44,13 @@ async def create_category(data: TagCategoryCreate, db: AsyncSession = Depends(ge
 
 
 @router.delete("/categories/{slug}", status_code=204)
-async def delete_category(slug: str, db: AsyncSession = Depends(get_db)):
-    """Delete a tag category and all its tags."""
+async def delete_category(
+    slug: str,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Delete a tag category and all its tags (parents only)."""
+    ensure_parent(user)
     ok = await tag_service.delete_tag_category(db, slug)
     if not ok:
         raise HTTPException(404, detail="Catégorie introuvable")
@@ -69,8 +81,13 @@ async def list_tags(
 
 
 @router.post("", response_model=TagRead, status_code=201)
-async def create_tag(data: TagCreate, db: AsyncSession = Depends(get_db)):
-    """Create a new tag."""
+async def create_tag(
+    data: TagCreate,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Create a new tag (parents only)."""
+    ensure_parent(user)
     # Verify the category exists
     cat = await tag_service.get_tag_category(db, data.category)
     if not cat:
@@ -86,8 +103,13 @@ async def create_tag(data: TagCreate, db: AsyncSession = Depends(get_db)):
 
 
 @router.delete("/{tag_id}", status_code=204)
-async def delete_tag(tag_id: int, db: AsyncSession = Depends(get_db)):
-    """Delete a tag."""
+async def delete_tag(
+    tag_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Delete a tag (parents only)."""
+    ensure_parent(user)
     ok = await tag_service.delete_tag(db, tag_id)
     if not ok:
         raise HTTPException(404, detail="Tag introuvable")

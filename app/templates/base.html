@@ -59,6 +59,7 @@
           <i class="mdi mdi-gesture-tap-button"></i>
           <span>Lanceur</span>
         </a>
+        {% if current_user is not defined or current_user.is_parent %}
         <a href="/tags" class="{% if active_nav == 'tags' %}active{% endif %}">
           <i class="mdi mdi-tag-multiple"></i>
           <span>Tags</span>
@@ -67,6 +68,7 @@
           <i class="mdi mdi-nfc"></i>
           <span>RFID</span>
         </a>
+        {% endif %}
         <a href="/browse" class="{% if active_nav == 'browse' %}active{% endif %}">
           <i class="mdi mdi-cloud-search"></i>
           <span>Parcourir MA</span>
@@ -78,6 +80,15 @@
       </nav>
 
       <div class="sidebar-footer">
+        {% if current_user is defined and current_user.username != 'dev' %}
+        <div class="text-sm text-muted d-flex align-center gap-1" style="margin-bottom:.5rem;">
+          <i class="mdi {{ 'mdi-account-star' if current_user.is_parent else 'mdi-account-child' }}"></i>
+          <span>{{ current_user.display_name }}</span>
+          <a href="/auth/logout" title="Se déconnecter" style="margin-left:auto;">
+            <i class="mdi mdi-logout"></i>
+          </a>
+        </div>
+        {% endif %}
         <a href="/api/v1/health" target="_blank" class="text-sm text-muted d-flex align-center gap-1">
           <i class="mdi mdi-heart-pulse"></i>
           <span>Santé API</span>

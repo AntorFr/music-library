@@ -21,6 +21,8 @@ from app.schemas.media import (
     PaginatedResponse,
 )
 from app.services import media_service
+from app.services.auth_service import CurrentUser, get_current_user
+from app.services.permissions import ensure_media_access
 from app.services.select_engine import build_simple_group, parse_tag_filters_from_qsl, split_csv
 
 router = APIRouter(prefix="/api/v1/media", tags=["media"])
@@ -38,6 +40,7 @@ async def list_media(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """List media items with filters and pagination."""
     tag_filters: dict[str, str] = {}
@@ -58,6 +61,7 @@ async def list_media(
         tag_filters=tag_filters if tag_filters else None,
         page=page,
         page_size=page_size,
+        owner_scope=user.owner_value,
     )
     return PaginatedResponse(
         items=[MediaRead.model_validate(i) for i in items],
@@ -97,6 +101,7 @@ async def select_media(
         description="none|soft|aggressive (appliqué uniquement si 0 résultat)",
     ),
     db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """
     Intelligent media selection — used by Home Assistant automations.
@@ -140,6 +145,7 @@ async def select_media(
         group=group,
         options=options,
         include_order=parsed.include_order,
+        owner_scope=user.owner_value,
     )
 
     base = str(request.base_url).rstrip("/")
@@ -201,6 +207,7 @@ async def select_media_query(
         },
     ),
     db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """Complex boolean selection (ET/OU/NOT) for Home Assistant."""
 
@@ -217,6 +224,7 @@ async def select_media_query(
         group=payload.query,
         options=payload.options,
         include_order=include_order,
+        owner_scope=user.owner_value,
     )
 
     base = str(request.base_url).rstrip("/")
@@ -229,11 +237,14 @@ async def select_media_query(
 
 
 @router.get("/{media_id}", response_model=MediaRead)
-async def get_media(media_id: str, db: AsyncSession = Depends(get_db)):
+async def get_media(
+    media_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
     """Get a single media item by ID."""
     item = await media_service.get_media(db, media_id)
-    if not item:
-        raise HTTPException(404, detail="Média introuvable")
+    ensure_media_access(user, item)
     return MediaRead.model_validate(item)
 
 
@@ -242,9 +253,12 @@ async def create_media(
     data: MediaCreate,
     response: Response,
     db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """Create a new media item."""
-    item, created = await media_service.create_media(db, data)
+    item, created = await media_service.create_media(
+        db, data, force_owner_value=user.owner_value
+    )
     if not created:
         response.status_code = 200
     return MediaRead.model_validate(item)
@@ -252,10 +266,17 @@ async def create_media(
 
 @router.put("/{media_id}", response_model=MediaRead)
 async def update_media(
-    media_id: str, data: MediaUpdate, db: AsyncSession = Depends(get_db)
+    media_id: str,
+    data: MediaUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """Update a media item (partial update)."""
-    item = await media_service.update_media(db, media_id, data)
+    existing = await media_service.get_media(db, media_id)
+    ensure_media_access(user, existing)
+    item = await media_service.update_media(
+        db, media_id, data, force_owner_value=user.owner_value
+    )
     if not item:
         raise HTTPException(404, detail="Média introuvable")
     return MediaRead.model_validate(item)
@@ -266,8 +287,11 @@ async def delete_media(
     media_id: str,
     hard: bool = False,
     db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """Delete a media item (soft delete by default)."""
+    existing = await media_service.get_media(db, media_id)
+    ensure_media_access(user, existing)
     ok = await media_service.delete_media(db, media_id, hard=hard)
     if not ok:
         raise HTTPException(404, detail="Média introuvable")

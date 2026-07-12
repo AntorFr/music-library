@@ -9,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import get_db
 from app.services import cover_service, media_service
+from app.services.auth_service import CurrentUser, get_current_user
+from app.services.permissions import ensure_media_access
 
 router = APIRouter(tags=["covers"])
 
@@ -71,11 +73,11 @@ async def upload_cover(
     media_id: str,
     file: UploadFile,
     db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """Upload a cover image for a media item."""
     media = await media_service.get_media(db, media_id)
-    if not media:
-        raise HTTPException(404, detail="Média introuvable")
+    ensure_media_access(user, media)
 
     content = await file.read()
     local_path = await cover_service.save_cover_from_bytes(media_id, content)

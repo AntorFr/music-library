@@ -24,7 +24,9 @@ from app.schemas.media import (
     QuickLaunchResponse,
 )
 from app.services import cover_service, media_service
+from app.services.auth_service import CurrentUser, get_current_user
 from app.services.music_assistant import MusicAssistantClient, get_ma_client
+from app.services.permissions import ensure_media_access
 
 router = APIRouter(prefix="/api/v1/quick", tags=["quick"])
 
@@ -103,11 +105,14 @@ async def quick_favourites(
     ),
     limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """List a profile's favourites, ready for an embedded cover grid.
 
     Filtered by the ``owner`` tag. Covers are returned as stable resolved URLs
     (``/covers/<id>.jpg``, 300×300). Unknown owners simply yield an empty list.
+    A child session only reaches its own grid (other owners yield empty) — on
+    the unauthenticated ESP surface every request is unrestricted.
     """
     items, _total = await media_service.list_media(
         db,
@@ -115,6 +120,7 @@ async def quick_favourites(
         tag_filters={"owner": owner},
         page=1,
         page_size=limit,
+        owner_scope=user.owner_value,
     )
 
     base = str(request.base_url).rstrip("/")
@@ -190,6 +196,7 @@ async def quick_children(
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     ma: MusicAssistantClient = Depends(get_ma_client),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """One page of a podcast's episodes / an audiobook's chapters (drill-down on scroll).
 
@@ -197,8 +204,7 @@ async def quick_children(
     chapters share the book `uri` and carry a `seek` offset (and no thumbnail).
     """
     item = await media_service.get_media(db, media_id)
-    if not item:
-        raise HTTPException(404, detail="Média introuvable")
+    ensure_media_access(user, item)
     if item.media_type not in _CHILD_TYPES:
         raise HTTPException(400, detail="Ce média n'a pas d'épisodes/chapitres")
 
