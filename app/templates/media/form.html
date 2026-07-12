@@ -85,13 +85,17 @@
       <div class="d-flex flex-wrap gap-1 mb-2" id="selectedTags">
         {% if item and item.tags %}
           {% for tag in item.tags %}
+          {% set locked = current_user is defined and current_user.owner_value
+             and tag.category == 'owner' and tag.value | lower == current_user.owner_value %}
           <span class="tag-chip" data-tag-id="{{ tag.id if tag.id is defined else '' }}">
             <i class="mdi mdi-tag" style="color: {{ cat_colors.get(tag.category, 'var(--primary)') }};"></i>
             {{ cat_labels.get(tag.category, tag.category) }}:{{ tag.value | capitalize }}
             <input type="hidden" name="tag_ids" value="{{ tag.id if tag.id is defined else '' }}">
+            {% if not locked %}{# a child's own owner tag is enforced server-side anyway #}
             <span class="remove-tag" onclick="this.parentElement.remove()">
               <i class="mdi mdi-close"></i>
             </span>
+            {% endif %}
           </span>
           {% endfor %}
         {% endif %}

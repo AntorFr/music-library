@@ -1,6 +1,6 @@
 [project]
 name = "music-library"
-version = "0.17.0"
+version = "0.18.0"
 description = "Family media library manager with Home Assistant & Music Assistant integration"
 requires-python = ">=3.12,<4"
 dependencies = [
@@ -18,6 +18,8 @@ dependencies = [
     "pydantic-settings>=2.7",
     "aiofiles>=24.1",
     "websockets>=14.0",
+    "authlib>=1.6",
+    "itsdangerous>=2.2",
 ]
 
 [project.optional-dependencies]

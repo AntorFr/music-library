@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.schemas.media import NowPlaying
 from app.services import cover_service, media_service
+from app.services.auth_service import CurrentUser, get_current_user
 from app.services.music_assistant import MusicAssistantClient, get_ma_client
 
 router = APIRouter(prefix="/api/v1/ma", tags=["music-assistant"])
@@ -402,6 +403,7 @@ async def ma_import_item(
     uri: str = Query(..., description="URI Music Assistant de l'élément à importer"),
     db: AsyncSession = Depends(get_db),
     ma: MusicAssistantClient = Depends(get_ma_client),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """
     Importer un élément Music Assistant dans le catalogue local.
@@ -446,7 +448,9 @@ async def ma_import_item(
         },
     )
 
-    media, _created = await media_service.create_media(db, create_data)
+    media, _created = await media_service.create_media(
+        db, create_data, force_owner_value=user.owner_value
+    )
 
     # Also try to download and cache the thumbnail locally
     thumb_url = ma.get_item_image_url(item, size=300)

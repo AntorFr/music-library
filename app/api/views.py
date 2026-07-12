@@ -20,6 +20,12 @@ from app.database import get_db
 from app.models.media import MediaType
 from app.schemas.media import MediaCreate, MediaUpdate
 from app.services import cover_service, media_service, rfid_service
+from app.services.auth_service import get_current_user
+from app.services.permissions import (
+    ensure_media_access,
+    ensure_parent,
+    is_own_owner_tag,
+)
 from app.services.tag_service import (
     create_tag,
     list_tag_categories,
@@ -83,6 +89,7 @@ def _base_ctx(request: Request, **extra: Any) -> dict:
         "request": request,
         "type_labels": TYPE_LABELS,
         "type_icons": TYPE_ICONS,
+        "current_user": get_current_user(request),
         **extra,
     }
 
@@ -137,6 +144,7 @@ def _parse_tag_input(
 
 @router.get("/rfid", response_class=HTMLResponse)
 async def rfid_page(request: Request, db: AsyncSession = Depends(get_db)):
+    ensure_parent(get_current_user(request))
     tags = await rfid_service.list_rfid_tags(db)
     view = [
         {
@@ -156,10 +164,12 @@ async def rfid_page(request: Request, db: AsyncSession = Depends(get_db)):
 
 @router.post("/rfid")
 async def rfid_upsert(
+    request: Request,
     uid: str = Form(...),
     name: str = Form(...),
     db: AsyncSession = Depends(get_db),
 ):
+    ensure_parent(get_current_user(request))
     await rfid_service.upsert_rfid_tag(db, uid=uid, name=name)
     await db.commit()
     return RedirectResponse("/rfid", status_code=303)
@@ -202,8 +212,13 @@ async def quick_launcher(
     owner: str | None = None,
     db: AsyncSession = Depends(get_db),
 ):
+    user = get_current_user(request)
     owner_tags = await list_tags(db, category="owner")
     owners = sorted({t.value for t in owner_tags}, key=str.casefold)
+    if user.owner_value is not None:
+        # A child only gets their own launcher — no owner picker.
+        owners = [o for o in owners if o.casefold() == user.owner_value]
+        owner = owners[0] if owners else None
     selected_owner = owner if owner in owners else None
 
     items = []
@@ -243,14 +258,19 @@ async def quick_launcher(
 
 @router.get("/", response_class=HTMLResponse)
 async def home(request: Request, db: AsyncSession = Depends(get_db)):
+    user = get_current_user(request)
+    scope = user.owner_value
+
     # Stats
-    all_items, total = await media_service.list_media(db, page=1, page_size=1)
-    _, active_count = await media_service.list_media(db, page=1, page_size=1)
+    all_items, total = await media_service.list_media(db, page=1, page_size=1, owner_scope=scope)
+    _, active_count = await media_service.list_media(db, page=1, page_size=1, owner_scope=scope)
 
     # Count by type
     by_type: dict[str, int] = {}
     for mt in MediaType:
-        _, cnt = await media_service.list_media(db, media_type=mt, page=1, page_size=1)
+        _, cnt = await media_service.list_media(
+            db, media_type=mt, page=1, page_size=1, owner_scope=scope
+        )
         if cnt > 0:
             by_type[mt.value] = cnt
 
@@ -268,7 +288,7 @@ async def home(request: Request, db: AsyncSession = Depends(get_db)):
         pass
 
     # Recent items
-    recent_items, _ = await media_service.list_media(db, page=1, page_size=12)
+    recent_items, _ = await media_service.list_media(db, page=1, page_size=12, owner_scope=scope)
 
     stats = {
         "total": total,
@@ -307,15 +327,19 @@ async def media_list(
         if key.startswith("tag_") and val:
             tag_filters[key[4:]] = val
 
+    user = get_current_user(request)
     items, total = await media_service.list_media(
         db, search=search, media_type=mt, provider=provider,
         tag_filters=tag_filters or None,
         page=page, page_size=page_size,
+        owner_scope=user.owner_value,
     )
     pages = math.ceil(total / page_size) if total else 0
 
     # Distinct providers for filter dropdown
-    all_items_for_providers, _ = await media_service.list_media(db, page=1, page_size=500)
+    all_items_for_providers, _ = await media_service.list_media(
+        db, page=1, page_size=500, owner_scope=user.owner_value
+    )
     providers = sorted(set(i.provider for i in all_items_for_providers))
 
     # Tags grouped by category for filter dropdowns
@@ -324,6 +348,9 @@ async def media_list(
     tags_by_cat: dict[str, list[str]] = {}
     for t in all_tags:
         tags_by_cat.setdefault(t.category, []).append(t.value)
+    if user.owner_value is not None:
+        # A child is hard-scoped to their owner tag — the filter would be misleading.
+        tags_by_cat.pop("owner", None)
     cat_labels = {c.slug: c.label for c in categories}
 
     ctx = _base_ctx(
@@ -392,7 +419,10 @@ async def media_create(
         description=description or None,
         tag_ids=[int(t) for t in tag_ids if t],
     )
-    item, _created = await media_service.create_media(db, data)
+    user = get_current_user(request)
+    item, _created = await media_service.create_media(
+        db, data, force_owner_value=user.owner_value
+    )
 
     # Download cover if URL provided
     if item.cover_url and not item.cover_local:
@@ -407,8 +437,7 @@ async def media_create(
 @router.get("/media/{media_id}", response_class=HTMLResponse)
 async def media_detail(request: Request, media_id: str, db: AsyncSession = Depends(get_db)):
     item = await media_service.get_media(db, media_id)
-    if not item:
-        raise HTTPException(404, detail="Média introuvable")
+    ensure_media_access(get_current_user(request), item)
 
     # Get players for play button
     players = []
@@ -482,8 +511,7 @@ async def media_podcast_episodes(
 ):
     """HTMX partial: list of podcast episodes from Music Assistant."""
     item = await media_service.get_media(db, media_id)
-    if not item:
-        raise HTTPException(404, detail="Média introuvable")
+    ensure_media_access(get_current_user(request), item)
     if item.media_type != MediaType.podcast:
         return templates.TemplateResponse(request, "components/podcast_episodes.html",
             {"request": request, "episodes": [], "item": item, "error": None},
@@ -529,8 +557,7 @@ async def media_audiobook_chapters(
 ):
     """HTMX partial: list of audiobook chapters from Music Assistant."""
     item = await media_service.get_media(db, media_id)
-    if not item:
-        raise HTTPException(404, detail="Média introuvable")
+    ensure_media_access(get_current_user(request), item)
     if item.media_type != MediaType.audiobook:
         return templates.TemplateResponse(request, "components/audiobook_chapters.html",
             {"request": request, "chapters": [], "item": item, "error": None,
@@ -598,6 +625,7 @@ async def media_assign_rfid(
     rfid_uids: list[str] = Form(default=[]),
     db: AsyncSession = Depends(get_db),
 ):
+    ensure_parent(get_current_user(request))
     try:
         await rfid_service.assign_rfid_tags_to_media(db, media_id=media_id, uids=rfid_uids)
         await db.commit()
@@ -626,6 +654,7 @@ async def media_unassign_rfid(
     uid: str,
     db: AsyncSession = Depends(get_db),
 ):
+    ensure_parent(get_current_user(request))
     await rfid_service.unassign_rfid_tag(db, uid=uid)
     await db.commit()
 
@@ -663,6 +692,10 @@ async def media_add_tag(
     if not category or not value:
         raise HTTPException(400, detail="Tag invalide")
 
+    user = get_current_user(request)
+    existing = await media_service.get_media(db, media_id)
+    ensure_media_access(user, existing)
+
     item = await media_service.add_tag_to_media(db, media_id, category, value)
     if not item:
         raise HTTPException(404, detail="Média introuvable")
@@ -680,6 +713,7 @@ async def media_add_tag(
             "item": item,
             "cat_labels": cat_labels,
             "cat_colors": cat_colors,
+            "current_user": user,
         })
 
     return templates.TemplateResponse(request, "components/media_tags_block.html", {
@@ -688,6 +722,7 @@ async def media_add_tag(
         "cat_labels": cat_labels,
         "cat_colors": cat_colors,
         "available_tag_options": available_tag_options,
+        "current_user": user,
     })
 
 
@@ -699,6 +734,13 @@ async def media_remove_tag(
     db: AsyncSession = Depends(get_db),
 ):
     """Remove a tag from a media item and return the updated tags block partial."""
+    user = get_current_user(request)
+    existing = await media_service.get_media(db, media_id)
+    ensure_media_access(user, existing)
+    target = next((t for t in existing.tags if t.id == tag_id), None)
+    if target is not None and is_own_owner_tag(user, target):
+        raise HTTPException(403, detail="Impossible de retirer son propre tag propriétaire")
+
     item = await media_service.remove_tag_from_media(db, media_id, tag_id)
     if not item:
         raise HTTPException(404, detail="Média introuvable")
@@ -718,6 +760,7 @@ async def media_remove_tag(
             "item": item,
             "cat_labels": cat_labels,
             "cat_colors": cat_colors,
+            "current_user": user,
         })
 
     return templates.TemplateResponse(request, "components/media_tags_block.html", {
@@ -726,14 +769,14 @@ async def media_remove_tag(
         "cat_labels": cat_labels,
         "cat_colors": cat_colors,
         "available_tag_options": available_tag_options,
+        "current_user": user,
     })
 
 
 @router.get("/media/{media_id}/edit", response_class=HTMLResponse)
 async def media_edit_form(request: Request, media_id: str, db: AsyncSession = Depends(get_db)):
     item = await media_service.get_media(db, media_id)
-    if not item:
-        raise HTTPException(404, detail="Média introuvable")
+    ensure_media_access(get_current_user(request), item)
     all_tags = await list_tags(db)
     categories = await list_tag_categories(db)
     cat_labels = {c.slug: c.label for c in categories}
@@ -774,7 +817,12 @@ async def media_update(
         is_active=is_active == "true",
         tag_ids=[int(t) for t in tag_ids if t],
     )
-    item = await media_service.update_media(db, media_id, data)
+    user = get_current_user(request)
+    existing = await media_service.get_media(db, media_id)
+    ensure_media_access(user, existing)
+    item = await media_service.update_media(
+        db, media_id, data, force_owner_value=user.owner_value
+    )
     if not item:
         raise HTTPException(404, detail="Média introuvable")
 
@@ -794,6 +842,7 @@ async def media_update(
 
 @router.get("/tags", response_class=HTMLResponse)
 async def tags_page(request: Request, db: AsyncSession = Depends(get_db)):
+    ensure_parent(get_current_user(request))
     all_tags = await list_tags(db)
     categories = await list_tag_categories(db)
     cat_labels = {c.slug: c.label for c in categories}
@@ -815,6 +864,7 @@ async def tags_create(
     value: str = Form(...),
     db: AsyncSession = Depends(get_db),
 ):
+    ensure_parent(get_current_user(request))
     await create_tag(db, category, value)
     await db.commit()
     return RedirectResponse("/tags", status_code=303)
@@ -828,6 +878,7 @@ async def tags_category_create(
     color: str = Form(""),
     db: AsyncSession = Depends(get_db),
 ):
+    ensure_parent(get_current_user(request))
     normalized_color = (color or "").strip().lower()
     if normalized_color and normalized_color not in TAG_COLOR_ALLOWED:
         raise HTTPException(400, detail="Couleur invalide (hors palette prédéfinie)")
@@ -843,9 +894,11 @@ async def tags_category_create(
 
 @router.delete("/tags/categories/{slug}")
 async def tags_category_delete(
+    request: Request,
     slug: str,
     db: AsyncSession = Depends(get_db),
 ):
+    ensure_parent(get_current_user(request))
     from app.services.tag_service import delete_tag_category
     ok = await delete_tag_category(db, slug)
     if not ok:
@@ -1010,6 +1063,7 @@ async def browse_search(request: Request, q: str = Query("", alias="maSearch")):
 
 @router.post("/browse/import")
 async def browse_import(
+    request: Request,
     uri: str = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
@@ -1051,7 +1105,9 @@ async def browse_import(
         },
     )
 
-    media, _created = await media_service.create_media(db, data)
+    media, _created = await media_service.create_media(
+        db, data, force_owner_value=get_current_user(request).owner_value
+    )
 
     # Download cover
     thumb_url = ma.get_item_image_url(item, size=300)

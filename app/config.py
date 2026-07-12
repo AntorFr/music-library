@@ -10,7 +10,7 @@ class Settings(BaseSettings):
 
     # --- Application ---
     app_name: str = "Music Library"
-    app_version: str = "0.17.0"
+    app_version: str = "0.18.0"
     debug: bool = False
 
     # --- Database ---
@@ -37,6 +37,25 @@ class Settings(BaseSettings):
     # evicts the oldest files (LRU by mtime) as the directory approaches the limit.
     thumbs_dir: Path = Path("/tmp/ml-thumbs")
     thumb_cache_max_bytes: int = 1024 * 1024 * 1024  # 1 GiB; 0 disables the cap
+
+    # --- Authentication (OIDC via the homelab IdP) ---
+    # The four ``oidc_*`` values go together: when any of them is missing the app runs in
+    # open "dev mode" (no login, every request acts as a parent). Roles are derived from
+    # the OIDC ``groups`` claim: members of ``oidc_admin_group`` are parents (full access),
+    # any other authenticated user is a child scoped to the owner tag matching their
+    # username (case-insensitive).
+    oidc_issuer: str = ""
+    oidc_client_id: str = ""
+    oidc_client_secret: str = ""
+    oidc_redirect_uri: str = ""
+    oidc_admin_group: str = "parents"
+    # Secret used to sign the session cookie. Leave empty in dev to use a random
+    # per-process key (sessions then reset on restart); set a stable value in production.
+    session_secret: str = ""
+    # Static bearer token for machine-to-machine API calls (Home Assistant automations).
+    # Requests carrying ``Authorization: Bearer <api_token>`` get parent-level access.
+    # Empty disables bearer auth.
+    api_token: str = ""
 
     # --- Music Assistant ---
     music_assistant_url: str = "http://localhost:8095"

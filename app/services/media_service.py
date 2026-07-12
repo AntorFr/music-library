@@ -22,6 +22,7 @@ from app.schemas.media import (
     TagQueryGroup,
 )
 from app.services import cover_service
+from app.services.permissions import OWNER_CATEGORY
 from app.services.select_engine import apply_fallback, evaluate_group
 from app.services.select_engine import normalize_select_token
 
@@ -73,6 +74,42 @@ async def _get_or_create_tag(
     return tag
 
 
+async def get_or_create_owner_tag(db: AsyncSession, owner_value: str) -> Tag:
+    """Owner tag for a child session, matched case-insensitively.
+
+    The username is casefolded while existing owner tags may be capitalised
+    ("Emilie") — reuse the existing tag instead of creating a lowercase twin.
+    """
+    stmt = select(Tag).where(
+        Tag.category == OWNER_CATEGORY, func.lower(Tag.value) == owner_value.casefold()
+    )
+    result = await db.execute(stmt)
+    tag = result.scalars().first()
+    if tag:
+        return tag
+    return await _get_or_create_tag(db, OWNER_CATEGORY, owner_value)
+
+
+def _apply_owner_scope(stmt, owner_scope: str | None):
+    """Restrict a Media select to items carrying the owner tag (child sessions).
+
+    This constraint is mandatory — it is applied at the SQL layer and is never
+    relaxed by the selection fallback logic.
+    """
+    if owner_scope:
+        stmt = stmt.where(
+            Media.id.in_(
+                select(MediaTag.media_id)
+                .join(Tag)
+                .where(
+                    Tag.category == OWNER_CATEGORY,
+                    func.lower(Tag.value) == owner_scope.casefold(),
+                )
+            )
+        )
+    return stmt
+
+
 async def _resolve_tags(
     db: AsyncSession,
     tag_ids: list[int] | None = None,
@@ -99,13 +136,18 @@ async def _resolve_tags(
 # CRUD
 # ---------------------------------------------------------------------------
 
-async def create_media(db: AsyncSession, data: MediaCreate) -> tuple[Media, bool]:
+async def create_media(
+    db: AsyncSession, data: MediaCreate, *, force_owner_value: str | None = None
+) -> tuple[Media, bool]:
     """Create a new media item.
 
     Duplicate control:
     - Unicity key is (provider, source_uri)
     - If an item already exists, returns it (created=False) instead of creating
       a second row. This keeps the operation idempotent for HA imports.
+
+    ``force_owner_value`` (child sessions): the caller's owner tag is appended
+    regardless of the submitted tags, so children cannot create unscoped media.
     """
 
     existing = await _get_by_provider_source(
@@ -127,6 +169,11 @@ async def create_media(db: AsyncSession, data: MediaCreate) -> tuple[Media, bool
             for t in new_tags:
                 if (t.category, t.value) not in current:
                     existing.tags.append(t)
+
+        if force_owner_value:
+            owner_tag = await get_or_create_owner_tag(db, force_owner_value)
+            if owner_tag not in existing.tags:
+                existing.tags.append(owner_tag)
 
         # Fill cover_url if missing
         if not existing.cover_url and data.cover_url:
@@ -159,6 +206,10 @@ async def create_media(db: AsyncSession, data: MediaCreate) -> tuple[Media, bool
         tag_ids=data.tag_ids,
         tags_inline=[{"category": t.category, "value": t.value} for t in data.tags_inline],
     )
+    if force_owner_value:
+        owner_tag = await get_or_create_owner_tag(db, force_owner_value)
+        if owner_tag not in tags:
+            tags.append(owner_tag)
     media.tags = tags
 
     db.add(media)
@@ -191,13 +242,18 @@ async def list_media(
     is_active: bool = True,
     page: int = 1,
     page_size: int = 50,
+    owner_scope: str | None = None,
 ) -> tuple[list[Media], int]:
     """
     List media with filtering, search, and pagination.
 
+    ``owner_scope`` (child sessions) restricts results to media carrying that
+    owner tag, on top of any user-supplied filters.
+
     Returns (items, total_count).
     """
     stmt = select(Media).options(selectinload(Media.tags)).where(Media.is_active == is_active)
+    stmt = _apply_owner_scope(stmt, owner_scope)
 
     if search:
         stmt = stmt.where(
@@ -239,8 +295,18 @@ async def list_media(
     return items, total
 
 
-async def update_media(db: AsyncSession, media_id: str, data: MediaUpdate) -> Media | None:
-    """Update a media item (partial update)."""
+async def update_media(
+    db: AsyncSession,
+    media_id: str,
+    data: MediaUpdate,
+    *,
+    force_owner_value: str | None = None,
+) -> Media | None:
+    """Update a media item (partial update).
+
+    ``force_owner_value`` (child sessions): the caller's owner tag is re-applied
+    after the tag update, so children cannot drop their own owner tag.
+    """
     media = await get_media(db, media_id)
     if not media:
         return None
@@ -272,6 +338,11 @@ async def update_media(db: AsyncSession, media_id: str, data: MediaUpdate) -> Me
         if tags_inline:
             inline_dicts = [{"category": t["category"], "value": t["value"]} for t in tags_inline]
         media.tags = await _resolve_tags(db, tag_ids=tag_ids, tags_inline=inline_dicts)
+
+    if force_owner_value:
+        owner_tag = await get_or_create_owner_tag(db, force_owner_value)
+        if owner_tag not in media.tags:
+            media.tags.append(owner_tag)
 
     # Re-download cover if URL changed
     if "cover_url" in update_data and data.cover_url:
@@ -392,6 +463,7 @@ async def select_media_by_query(
     group: TagQueryGroup,
     options: MediaSelectQueryOptions,
     include_order: list[str] | None = None,
+    owner_scope: str | None = None,
 ) -> list[Media]:
     """Select media items using a boolean tag query group + HA-friendly options.
 
@@ -400,9 +472,11 @@ async def select_media_by_query(
     - options.provider
     - options.exclude_ids
     - group.none_of
+    - owner_scope (child sessions — applied in SQL, out of the fallback's reach)
     """
 
     stmt = select(Media).options(selectinload(Media.tags)).where(Media.is_active == True)  # noqa: E712
+    stmt = _apply_owner_scope(stmt, owner_scope)
 
     if options.search:
         stmt = stmt.where(Media.title.ilike(f"%{options.search}%"))
