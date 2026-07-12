@@ -8,16 +8,16 @@ from __future__ import annotations
 
 from fastapi import HTTPException
 
-from app.services.auth_service import CurrentUser
+from app.services.auth_service import CurrentUser, normalize_owner
 
 #: Tag category that carries media ownership.
 OWNER_CATEGORY = "owner"
 
 
 def media_owner_values(item) -> set[str]:
-    """Casefolded values of the owner tags carried by a media item."""
+    """Normalised values of the owner tags carried by a media item."""
     return {
-        t.value.casefold()
+        normalize_owner(t.value)
         for t in (getattr(item, "tags", []) or [])
         if t.category == OWNER_CATEGORY and t.value
     }
@@ -49,5 +49,5 @@ def is_own_owner_tag(user: CurrentUser, tag) -> bool:
     return (
         user.owner_value is not None
         and tag.category == OWNER_CATEGORY
-        and (tag.value or "").casefold() == user.owner_value
+        and normalize_owner(tag.value or "") == user.owner_value
     )

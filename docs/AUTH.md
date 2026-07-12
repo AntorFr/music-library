@@ -13,8 +13,8 @@ Le rôle est dérivé du claim `groups` (scopes `openid profile email groups`) :
 | **enfant** | tout autre utilisateur authentifié | voir uniquement les médias portant son tag `owner`, en ajouter (tag appliqué d'office), modifier/supprimer les siens |
 
 Le lien utilisateur ↔ médias repose sur une convention : le **username** Authelia
-de l'enfant correspond (insensible à la casse) à la **valeur de son tag `owner`**
-(ex. user `lea` ↔ tag `owner:Lea`).
+de l'enfant correspond (insensible à la casse **et aux accents**) à la **valeur de
+son tag `owner`** (ex. user `zoe` ↔ tag `owner:Zoé`).
 
 Garde-fous côté enfant :
 

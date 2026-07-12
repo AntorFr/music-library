@@ -20,7 +20,7 @@ from app.database import get_db
 from app.models.media import MediaType
 from app.schemas.media import MediaCreate, MediaUpdate
 from app.services import cover_service, media_service, rfid_service
-from app.services.auth_service import get_current_user
+from app.services.auth_service import get_current_user, normalize_owner
 from app.services.permissions import (
     ensure_media_access,
     ensure_parent,
@@ -36,6 +36,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["frontend"])
 templates = Jinja2Templates(directory="app/templates")
+# Owner matching is accent/case-insensitive; templates need it to lock the
+# child's own owner tag chip.
+templates.env.filters["owner_norm"] = normalize_owner
 
 # ---------------------------------------------------------------------------
 # Shared template context helpers
@@ -217,7 +220,7 @@ async def quick_launcher(
     owners = sorted({t.value for t in owner_tags}, key=str.casefold)
     if user.owner_value is not None:
         # A child only gets their own launcher — no owner picker.
-        owners = [o for o in owners if o.casefold() == user.owner_value]
+        owners = [o for o in owners if normalize_owner(o) == user.owner_value]
         owner = owners[0] if owners else None
     selected_owner = owner if owner in owners else None
 

@@ -22,6 +22,7 @@ from app.schemas.media import (
     TagQueryGroup,
 )
 from app.services import cover_service
+from app.services.auth_service import normalize_owner
 from app.services.permissions import OWNER_CATEGORY
 from app.services.select_engine import apply_fallback, evaluate_group
 from app.services.select_engine import normalize_select_token
@@ -74,37 +75,47 @@ async def _get_or_create_tag(
     return tag
 
 
-async def get_or_create_owner_tag(db: AsyncSession, owner_value: str) -> Tag:
-    """Owner tag for a child session, matched case-insensitively.
+async def _matching_owner_tag_ids(db: AsyncSession, owner_scope: str) -> list[int]:
+    """Ids of the owner tags matching a normalised owner key.
 
-    The username is casefolded while existing owner tags may be capitalised
-    ("Emilie") — reuse the existing tag instead of creating a lowercase twin.
+    Matching is accent- and case-insensitive ("zoe" ↔ tag "Zoé"), which
+    SQLite cannot do natively — so the (small) owner tag list is matched in
+    Python.
     """
-    stmt = select(Tag).where(
-        Tag.category == OWNER_CATEGORY, func.lower(Tag.value) == owner_value.casefold()
+    result = await db.execute(
+        select(Tag.id, Tag.value).where(Tag.category == OWNER_CATEGORY)
     )
-    result = await db.execute(stmt)
-    tag = result.scalars().first()
-    if tag:
-        return tag
+    return [
+        tag_id for tag_id, value in result.all()
+        if normalize_owner(value or "") == normalize_owner(owner_scope)
+    ]
+
+
+async def get_or_create_owner_tag(db: AsyncSession, owner_value: str) -> Tag:
+    """Owner tag for a child session, matched accent/case-insensitively.
+
+    The username is plain ("zoe") while the existing owner tag may be
+    accented/capitalised ("Zoé") — reuse the existing tag instead of
+    creating a twin.
+    """
+    tag_ids = await _matching_owner_tag_ids(db, owner_value)
+    if tag_ids:
+        result = await db.execute(select(Tag).where(Tag.id == tag_ids[0]))
+        return result.scalar_one()
     return await _get_or_create_tag(db, OWNER_CATEGORY, owner_value)
 
 
-def _apply_owner_scope(stmt, owner_scope: str | None):
+async def _apply_owner_scope(db: AsyncSession, stmt, owner_scope: str | None):
     """Restrict a Media select to items carrying the owner tag (child sessions).
 
     This constraint is mandatory — it is applied at the SQL layer and is never
-    relaxed by the selection fallback logic.
+    relaxed by the selection fallback logic. No matching owner tag ⇒ no rows.
     """
     if owner_scope:
+        tag_ids = await _matching_owner_tag_ids(db, owner_scope)
         stmt = stmt.where(
             Media.id.in_(
-                select(MediaTag.media_id)
-                .join(Tag)
-                .where(
-                    Tag.category == OWNER_CATEGORY,
-                    func.lower(Tag.value) == owner_scope.casefold(),
-                )
+                select(MediaTag.media_id).where(MediaTag.tag_id.in_(tag_ids))
             )
         )
     return stmt
@@ -253,7 +264,7 @@ async def list_media(
     Returns (items, total_count).
     """
     stmt = select(Media).options(selectinload(Media.tags)).where(Media.is_active == is_active)
-    stmt = _apply_owner_scope(stmt, owner_scope)
+    stmt = await _apply_owner_scope(db, stmt, owner_scope)
 
     if search:
         stmt = stmt.where(
@@ -476,7 +487,7 @@ async def select_media_by_query(
     """
 
     stmt = select(Media).options(selectinload(Media.tags)).where(Media.is_active == True)  # noqa: E712
-    stmt = _apply_owner_scope(stmt, owner_scope)
+    stmt = await _apply_owner_scope(db, stmt, owner_scope)
 
     if options.search:
         stmt = stmt.where(Media.title.ilike(f"%{options.search}%"))

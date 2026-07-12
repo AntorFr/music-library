@@ -304,3 +304,42 @@ async def test_child_can_edit_own_media(client: AsyncClient, db: AsyncSession, o
     )
     assert response.status_code == 200
     assert response.json()["title"] == "Comptines 2"
+
+
+# ---------------------------------------------------------------------------
+# Accent-insensitive owner matching (username "zoe" ↔ tag "Zoé")
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_child_matches_accented_owner_tag(client: AsyncClient, db: AsyncSession, oidc_on):
+    _login_child(client, "zoe")
+    mine = await _create_media(db, title="Comptines", owner="Zoé", uri="spotify://playlist/c")
+    await _create_media(db, title="Rock", owner="papa", uri="spotify://playlist/r")
+
+    response = await client.get("/api/v1/media")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 1
+    assert data["items"][0]["id"] == mine.id
+
+
+@pytest.mark.asyncio
+async def test_child_create_reuses_accented_owner_tag(
+    client: AsyncClient, db: AsyncSession, oidc_on
+):
+    _login_child(client, "zoe")
+    await _create_media(db, title="Comptines", owner="Zoé", uri="spotify://playlist/c")
+
+    response = await client.post(
+        "/api/v1/media",
+        json={
+            "title": "Nouveau",
+            "media_type": "playlist",
+            "source_uri": "spotify://playlist/new",
+            "provider": "spotify",
+        },
+    )
+    assert response.status_code == 201
+    owner_tags = [t["value"] for t in response.json()["tags"] if t["category"] == "owner"]
+    # The existing accented tag is reused — no lowercase twin created.
+    assert owner_tags == ["Zoé"]

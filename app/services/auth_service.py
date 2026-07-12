@@ -22,6 +22,7 @@ every request acts as a parent and no login is required.
 from __future__ import annotations
 
 import secrets
+import unicodedata
 from dataclasses import dataclass
 from typing import Literal
 
@@ -33,6 +34,16 @@ Role = Literal["parent", "child"]
 
 #: Key under which the identity dict is stored in the session cookie.
 SESSION_USER_KEY = "user"
+
+
+def normalize_owner(value: str) -> str:
+    """Normalise an owner value for matching: casefold + strip accents.
+
+    Usernames are plain ASCII ("zoe") while owner tags may be accented
+    ("Zoé") — both must map to the same key.
+    """
+    decomposed = unicodedata.normalize("NFKD", value.casefold())
+    return "".join(ch for ch in decomposed if not unicodedata.combining(ch))
 
 # ---------------------------------------------------------------------------
 # Identity
@@ -51,8 +62,8 @@ class CurrentUser:
 
     @property
     def owner_value(self) -> str | None:
-        """Owner-tag value a child is scoped to (``None`` = unrestricted)."""
-        return None if self.is_parent else self.username.casefold()
+        """Normalised owner-tag key a child is scoped to (``None`` = unrestricted)."""
+        return None if self.is_parent else normalize_owner(self.username)
 
 
 #: Identity used when OIDC is not configured (local development).
