@@ -5,12 +5,11 @@
 **État :** v0.19.0 — auth OIDC (Authelia) + rôles parents/enfants côté app :
 scope owner en SQL (tag username + tags des groupes en lecture, écriture sur
 son tag seul), auto-tag à la création, matching accents/casse, UI adaptée,
-57 tests verts. Reste le câblage infra (client OIDC, comptes enfants, values
-Helm) et le token HA.
+57 tests verts. Infra déployée (client OIDC Authelia, comptes enfants,
+values Helm 0.19.0) et vérifiée de bout en bout en prod.
 
 **Prochaines étapes :**
-- [ ] Déclarer le client OIDC `music-library` dans Authelia + comptes enfants (usernames = valeurs de tags owner)
-- [ ] Values Helm : env `ML_OIDC_*`, `ML_SESSION_SECRET`, `ML_API_TOKEN`, retrait du middleware forwardAuth, tag image 0.18.0
-- [ ] HA : header bearer sur les appels `music_manager.yaml`
-- [ ] Vérif de bout en bout (login parent/enfant, HA, port ESP)
+- [ ] HA : ajouter `music_library_token` dans secrets.yaml sur la box + reload (le rest_command est déjà poussé)
+- [ ] Tester un login enfant complet dans le navigateur (flow OIDC vérifié par API)
+- [ ] Décider : purge de l'historique public v0.18.1 (prénom dans une fixture de test, anonymisée depuis)
 - [ ] Backlog : voir TODO.md (recherche floue, lanceur mobile…)
