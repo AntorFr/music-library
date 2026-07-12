@@ -22,10 +22,11 @@ from app.schemas.media import MediaCreate, MediaUpdate
 from app.services import cover_service, media_service, rfid_service
 from app.services.auth_service import get_current_user, normalize_owner
 from app.services.permissions import (
+    OWNER_CATEGORY,
     ensure_media_access,
     ensure_media_edit,
     ensure_parent,
-    is_own_owner_tag,
+    is_protected_owner_tag,
 )
 from app.services.tag_service import (
     create_tag,
@@ -37,9 +38,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["frontend"])
 templates = Jinja2Templates(directory="app/templates")
-# Owner matching is accent/case-insensitive; templates need it to lock the
-# child's own owner tag chip.
-templates.env.filters["owner_norm"] = normalize_owner
 
 # ---------------------------------------------------------------------------
 # Shared template context helpers
@@ -701,6 +699,8 @@ async def media_add_tag(
     user = get_current_user(request)
     existing = await media_service.get_media(db, media_id)
     ensure_media_edit(user, existing)
+    if user.owner_value is not None and category == OWNER_CATEGORY:
+        raise HTTPException(403, detail="Tags propriétaires gérés par les parents")
 
     item = await media_service.add_tag_to_media(db, media_id, category, value)
     if not item:
@@ -744,8 +744,8 @@ async def media_remove_tag(
     existing = await media_service.get_media(db, media_id)
     ensure_media_edit(user, existing)
     target = next((t for t in existing.tags if t.id == tag_id), None)
-    if target is not None and is_own_owner_tag(user, target):
-        raise HTTPException(403, detail="Impossible de retirer son propre tag propriétaire")
+    if target is not None and is_protected_owner_tag(user, target):
+        raise HTTPException(403, detail="Tags propriétaires gérés par les parents")
 
     item = await media_service.remove_tag_from_media(db, media_id, tag_id)
     if not item:
@@ -827,7 +827,7 @@ async def media_update(
     existing = await media_service.get_media(db, media_id)
     ensure_media_edit(user, existing)
     item = await media_service.update_media(
-        db, media_id, data, force_owner_value=user.owner_value
+        db, media_id, data, preserve_owner_tags=user.owner_value is not None
     )
     if not item:
         raise HTTPException(404, detail="Média introuvable")

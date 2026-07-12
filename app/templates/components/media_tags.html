@@ -6,8 +6,8 @@
       <i class="mdi mdi-tag" style="color: {{ cat_colors.get(tag.category, 'var(--primary)') }};"></i>
       <span class="text-muted text-sm">{{ cat_labels.get(tag.category, tag.category) }}:</span>{{ tag.value | capitalize }}
       {% set locked = current_user is defined and current_user.owner_value
-         and tag.category == 'owner' and tag.value | owner_norm == current_user.owner_value %}
-      {% if not locked %}{# a child cannot remove their own owner tag (enforced server-side) #}
+         and tag.category == 'owner' %}
+      {% if not locked %}{# owner tags are parent-managed (enforced server-side) #}
       <button class="tag-remove-btn"
               hx-delete="/media/{{ item.id }}/tags/{{ tag.id }}"
               hx-target="#media-tags-block"

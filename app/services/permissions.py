@@ -29,14 +29,6 @@ def can_view_media(user: CurrentUser, item) -> bool:
     return keys is None or bool(keys & media_owner_values(item))
 
 
-def can_edit_media(user: CurrentUser, item) -> bool:
-    """Edit rule: a child only modifies media carrying their OWN owner tag.
-
-    Group-shared media (``owner:famille``…) stay visible but read-only for them.
-    """
-    return user.owner_value is None or user.owner_value in media_owner_values(item)
-
-
 def ensure_media_access(user: CurrentUser, item) -> None:
     """Raise 404 when the item is missing — or hidden from this user.
 
@@ -48,10 +40,12 @@ def ensure_media_access(user: CurrentUser, item) -> None:
 
 
 def ensure_media_edit(user: CurrentUser, item) -> None:
-    """404 when invisible, 403 when visible but not theirs to modify."""
+    """A child edits anything they can see (own tag + group tags).
+
+    Editing group-shared media directly avoids duplicate entries; ownership
+    itself stays out of their hands (see :func:`is_protected_owner_tag`).
+    """
     ensure_media_access(user, item)
-    if not can_edit_media(user, item):
-        raise HTTPException(403, detail="Média partagé — modification réservée aux parents")
 
 
 def ensure_parent(user: CurrentUser) -> None:
@@ -60,10 +54,9 @@ def ensure_parent(user: CurrentUser) -> None:
         raise HTTPException(403, detail="Réservé aux parents")
 
 
-def is_own_owner_tag(user: CurrentUser, tag) -> bool:
-    """True when the tag is the child's own owner tag (which they cannot remove)."""
-    return (
-        user.owner_value is not None
-        and tag.category == OWNER_CATEGORY
-        and normalize_owner(tag.value or "") == user.owner_value
-    )
+def is_protected_owner_tag(user: CurrentUser, tag) -> bool:
+    """True when the tag is an owner tag a child must not touch — i.e. ALL of
+    them: removing any owner tag would hide the media from themselves or from
+    the rest of the group. Ownership is managed by parents (the child's own
+    tag is still added automatically at creation)."""
+    return user.owner_value is not None and tag.category == OWNER_CATEGORY

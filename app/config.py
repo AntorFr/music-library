@@ -10,7 +10,7 @@ class Settings(BaseSettings):
 
     # --- Application ---
     app_name: str = "Music Library"
-    app_version: str = "0.19.0"
+    app_version: str = "0.20.0"
     debug: bool = False
 
     # --- Database ---

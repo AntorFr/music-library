@@ -22,7 +22,7 @@ from app.schemas.media import (
 )
 from app.services import media_service
 from app.services.auth_service import CurrentUser, get_current_user
-from app.services.permissions import ensure_media_access, ensure_media_edit
+from app.services.permissions import ensure_media_access, ensure_media_edit, ensure_parent
 from app.services.select_engine import build_simple_group, parse_tag_filters_from_qsl, split_csv
 
 router = APIRouter(prefix="/api/v1/media", tags=["media"])
@@ -275,7 +275,7 @@ async def update_media(
     existing = await media_service.get_media(db, media_id)
     ensure_media_edit(user, existing)
     item = await media_service.update_media(
-        db, media_id, data, force_owner_value=user.owner_value
+        db, media_id, data, preserve_owner_tags=user.owner_value is not None
     )
     if not item:
         raise HTTPException(404, detail="Média introuvable")
@@ -292,6 +292,9 @@ async def delete_media(
     """Delete a media item (soft delete by default)."""
     existing = await media_service.get_media(db, media_id)
     ensure_media_edit(user, existing)
+    if hard:
+        # Hard delete is unrecoverable — children only soft-delete.
+        ensure_parent(user)
     ok = await media_service.delete_media(db, media_id, hard=hard)
     if not ok:
         raise HTTPException(404, detail="Média introuvable")

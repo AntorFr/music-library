@@ -314,12 +314,13 @@ async def update_media(
     media_id: str,
     data: MediaUpdate,
     *,
-    force_owner_value: str | None = None,
+    preserve_owner_tags: bool = False,
 ) -> Media | None:
     """Update a media item (partial update).
 
-    ``force_owner_value`` (child sessions): the caller's owner tag is re-applied
-    after the tag update, so children cannot drop their own owner tag.
+    ``preserve_owner_tags`` (child sessions): the media's owner tags are kept
+    exactly as they were, whatever the submitted tag list says — children edit
+    content, parents manage ownership.
     """
     media = await get_media(db, media_id)
     if not media:
@@ -351,12 +352,11 @@ async def update_media(
         inline_dicts = None
         if tags_inline:
             inline_dicts = [{"category": t["category"], "value": t["value"]} for t in tags_inline]
-        media.tags = await _resolve_tags(db, tag_ids=tag_ids, tags_inline=inline_dicts)
-
-    if force_owner_value:
-        owner_tag = await get_or_create_owner_tag(db, force_owner_value)
-        if owner_tag not in media.tags:
-            media.tags.append(owner_tag)
+        new_tags = await _resolve_tags(db, tag_ids=tag_ids, tags_inline=inline_dicts)
+        if preserve_owner_tags:
+            previous_owner = [t for t in media.tags if t.category == OWNER_CATEGORY]
+            new_tags = [t for t in new_tags if t.category != OWNER_CATEGORY] + previous_owner
+        media.tags = new_tags
 
     # Re-download cover if URL changed
     if "cover_url" in update_data and data.cover_url:

@@ -10,7 +10,7 @@ Le rôle est dérivé du claim `groups` (scopes `openid profile email groups`) :
 | Rôle | Condition | Droits |
 |---|---|---|
 | **parent** | membre du groupe `ML_OIDC_ADMIN_GROUP` (défaut `parents`) | tout voir / tout modifier |
-| **enfant** | tout autre utilisateur authentifié | voir les médias de son tag `owner` **et des tags de ses groupes**, en ajouter (son tag appliqué d'office), modifier/supprimer **les siens** |
+| **enfant** | tout autre utilisateur authentifié | voir **et modifier** les médias de son tag `owner` et des tags de ses groupes, en ajouter (son tag appliqué d'office) — sans jamais toucher aux tags `owner` |
 
 Le lien utilisateur ↔ médias repose sur une convention (insensible à la casse
 **et aux accents**) :
@@ -19,8 +19,8 @@ Le lien utilisateur ↔ médias repose sur une convention (insensible à la cass
   ↔ tag `owner:Zoé`) — c'est le périmètre **d'écriture** de l'enfant ;
 - chaque **groupe** Authelia de l'utilisateur ↔ un tag `owner` partagé (ex.
   groupes `famille`, `enfants` ↔ tags `owner:famille`, `owner:enfants`) —
-  s'ajoute à son périmètre de **lecture** uniquement : un média partagé est
-  visible mais reste en lecture seule pour lui (403 en modification).
+  étend son périmètre de lecture **et** d'édition (modifier le média partagé
+  directement évite les doublons).
 
 Garde-fous côté enfant :
 
@@ -28,7 +28,11 @@ Garde-fous côté enfant :
   `/select`, `/select/query`, lanceur rapide) et n'est jamais relâché par le
   fallback de sélection ;
 - toute création/import reçoit d'office son tag `owner` ;
-- il ne peut pas retirer son propre tag `owner` d'un média ;
+- les tags `owner` sont gérés par les parents : un enfant ne peut ni en
+  ajouter ni en retirer, et une mise à jour préserve les tags `owner`
+  existants du média tels quels ;
+- la suppression définitive (`hard=true`) est réservée aux parents (l'enfant
+  ne fait que du soft delete, réversible) ;
 - les médias des autres répondent **404** (pas de sondage d'existence) ;
 - gestion des tags/catégories, RFID et import MA global : **parents uniquement** (403).
 

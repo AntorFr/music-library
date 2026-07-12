@@ -365,15 +365,34 @@ async def test_child_sees_group_shared_media(client: AsyncClient, db: AsyncSessi
 
 
 @pytest.mark.asyncio
-async def test_child_cannot_edit_group_shared_media(
+async def test_child_edits_group_shared_media_without_touching_ownership(
     client: AsyncClient, db: AsyncSession, oidc_on
 ):
     _login_child(client, "Léo", groups=["famille"])
     shared = await _create_media(db, title="Partagé", owner="famille", uri="spotify://playlist/f")
 
-    # Visible…
-    assert (await client.get(f"/api/v1/media/{shared.id}")).status_code == 200
-    # …but read-only for the child: 403, not 404.
-    response = await client.put(f"/api/v1/media/{shared.id}", json={"title": "Pwned"})
+    # Editable directly (no need to duplicate it under their own tag)…
+    response = await client.put(
+        f"/api/v1/media/{shared.id}", json={"title": "Partagé 2", "tag_ids": []}
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["title"] == "Partagé 2"
+    # …but the owner tags are preserved as-is: famille kept, no own tag added.
+    owners = sorted(t["value"] for t in body["tags"] if t["category"] == "owner")
+    assert owners == ["famille"]
+
+    # Soft delete allowed, hard delete stays parent-only.
+    assert (await client.delete(f"/api/v1/media/{shared.id}?hard=true")).status_code == 403
+    assert (await client.delete(f"/api/v1/media/{shared.id}")).status_code == 204
+
+
+@pytest.mark.asyncio
+async def test_child_cannot_hand_out_owner_tags(client: AsyncClient, db: AsyncSession, oidc_on):
+    _login_child(client, "lea")
+    mine = await _create_media(db, title="Comptines", owner="lea", uri="spotify://playlist/c")
+
+    response = await client.post(
+        f"/media/{mine.id}/tags", data={"category": "owner", "value": "famille"}
+    )
     assert response.status_code == 403
-    assert (await client.delete(f"/api/v1/media/{shared.id}")).status_code == 403
