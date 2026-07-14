@@ -312,7 +312,12 @@ class MusicAssistantClient:
             self._partial_results.clear()
 
             logger.info("Connecting to Music Assistant at %s", self.ws_url)
-            self._ws = await websockets.connect(self.ws_url)
+            # Default max_size is 1 MiB — MA can send larger single frames (e.g. a
+            # podcast_episodes result for a show with many/long episodes), which the
+            # client would otherwise reject with close code 1009 "message too big"
+            # and silently drop the connection (surfaced to users as a generic
+            # "MA WebSocket connection lost"). Disable the cap; MA is a trusted host.
+            self._ws = await websockets.connect(self.ws_url, max_size=None)
 
             # First message from server is ServerInfoMessage
             import json
