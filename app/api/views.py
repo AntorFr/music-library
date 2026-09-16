@@ -217,13 +217,27 @@ async def web_manifest():
             "display": "standalone",
             "background_color": "#181818",
             "theme_color": "#03a9f4",
+            # PNGs first: SVG manifest icons are ignored by iOS and by older Android.
+            # They are square on purpose — both platforms apply their own corner mask.
             "icons": [
+                {
+                    "src": "/static/img/icon-192.png",
+                    "sizes": "192x192",
+                    "type": "image/png",
+                    "purpose": "any maskable",
+                },
+                {
+                    "src": "/static/img/icon-512.png",
+                    "sizes": "512x512",
+                    "type": "image/png",
+                    "purpose": "any maskable",
+                },
                 {
                     "src": "/static/img/logo.svg",
                     "sizes": "any",
                     "type": "image/svg+xml",
-                    "purpose": "any maskable",
-                }
+                    "purpose": "any",
+                },
             ],
         },
         media_type="application/manifest+json",

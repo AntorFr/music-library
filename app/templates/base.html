@@ -5,9 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Music Library{% endblock %}</title>
 
-  <!-- Favicon -->
+  <!-- Favicon. iOS ignores SVG for apple-touch-icon, hence the PNG (see scripts/make_icons.py). -->
   <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg">
-  <link rel="apple-touch-icon" href="/static/img/favicon.svg">
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/img/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-title" content="{% block home_screen_name %}Music Library{% endblock %}">
 
   <!-- Material Design Icons -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
