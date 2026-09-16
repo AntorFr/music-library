@@ -27,8 +27,10 @@ from app.services import cover_service, media_service
 from app.services.auth_service import CurrentUser, get_current_user
 from app.services.music_assistant import (
     MusicAssistantClient,
+    fetch_audiobook,
+    fetch_podcast_episodes,
     get_ma_client,
-    resolve_ma_provider_and_id,
+    normalize_chapters,
 )
 from app.services.permissions import ensure_media_access
 
@@ -121,11 +123,7 @@ async def quick_favourites(
 
 
 async def _podcast_children(ma: MusicAssistantClient, item, base: str) -> list[QuickChildItem]:
-    provider, item_id = resolve_ma_provider_and_id(item)
-    if not provider or not item_id:
-        ma_item = await ma.get_item_by_uri(item.source_uri or "")
-        provider, item_id = ma_item.provider, ma_item.item_id
-    episodes = await ma.get_podcast_episodes(item_id, provider)
+    episodes = await fetch_podcast_episodes(ma, item)
     out: list[QuickChildItem] = []
     for e in episodes:
         # Route the thumbnail through our own cached proxy (see `/thumb`): the device fetches
@@ -147,27 +145,18 @@ async def _podcast_children(ma: MusicAssistantClient, item, base: str) -> list[Q
 
 
 async def _audiobook_children(ma: MusicAssistantClient, item) -> list[QuickChildItem]:
-    provider, item_id = resolve_ma_provider_and_id(item)
-    if provider and item_id:
-        ma_item = await ma.get_item("audiobook", item_id, provider)
-    else:
-        ma_item = await ma.get_item_by_uri(item.source_uri or "")
+    ma_item = await fetch_audiobook(ma, item)
     book_uri = ma_item.uri or item.source_uri or ""
-    out: list[QuickChildItem] = []
-    for ch in sorted(ma_item.chapters, key=lambda c: c.get("position", 0) or 0):
-        start = float(ch.get("start", 0) or 0)
-        end = ch.get("end")
-        end_f = float(end) if end is not None else None
-        out.append(
-            QuickChildItem(
-                title=ch.get("name") or f"Chapitre {ch.get('position', 0)}",
-                uri=book_uri,           # chapters share the book uri; seek selects the chapter
-                seek=int(start),
-                position=int(ch.get("position", 0) or 0),
-                duration_s=int(end_f - start) if end_f else None,
-            )
+    return [
+        QuickChildItem(
+            title=ch["name"] or f"Chapitre {ch['position']}",
+            uri=book_uri,           # chapters share the book uri; seek selects the chapter
+            seek=int(ch["start"]),
+            position=ch["position"],
+            duration_s=int(ch["duration"]) if ch["duration"] is not None else None,
         )
-    return out
+        for ch in normalize_chapters(ma_item)
+    ]
 
 
 @router.get("/item/{media_id}/children", response_model=QuickChildrenResponse)

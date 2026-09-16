@@ -71,9 +71,21 @@ paire **cohérente**. Or une ligne `media` locale stocke deux choses différente
 
 Croiser `provider=spotify` avec l'id *library* `88` fait chercher à MA un objet qui
 n'existe pas (`shows/88 not found`, `ASIN 29 not present`). La résolution passe donc
-par `source_uri` — voir `resolve_ma_provider_and_id()` dans
-`app/services/music_assistant.py`, seule source pour les deux appelants
-(`app/api/views.py` et `app/api/quick.py`).
+par `source_uri`.
+
+`app/services/music_assistant.py` porte les fonctions partagées par les deux surfaces
+(pages HTMX `app/api/views.py` et API embarquée `app/api/quick.py`) — elles n'écrivent
+plus que leur propre sérialisation :
+
+| Fonction | Rôle |
+| --- | --- |
+| `resolve_ma_provider_and_id(item)` | couple `(provider, item_id)` cohérent depuis `source_uri` |
+| `fetch_podcast_episodes(ma, item)` | épisodes d'un podcast local, objets MA bruts |
+| `fetch_audiobook(ma, item)` | le livre audio MA (chapitres, reprise, durée) |
+| `normalize_chapters(ma_item)` | chapitres en dicts triés, `end`/`duration` en secondes |
+
+L'import MA → catalogue local vit lui dans `app/services/ma_import.py`, partagé par
+`/api/v1/ma/import` et `/browse/import`.
 
 ## Procédure pour une prochaine version
 

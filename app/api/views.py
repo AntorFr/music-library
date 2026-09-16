@@ -537,16 +537,10 @@ async def media_podcast_episodes(
     error: str | None = None
     episodes: list[dict] = []
     try:
-        from app.services.music_assistant import get_ma_client, resolve_ma_provider_and_id
+        from app.services.music_assistant import fetch_podcast_episodes, get_ma_client
         ma = await get_ma_client()
 
-        provider, item_id = resolve_ma_provider_and_id(item)
-        if not provider or not item_id:
-            ma_item = await ma.get_item_by_uri(item.source_uri or "")
-            provider = ma_item.provider
-            item_id = ma_item.item_id
-
-        ma_episodes = await ma.get_podcast_episodes(item_id, provider)
+        ma_episodes = await fetch_podcast_episodes(ma, item)
         episodes = [
             {
                 "uri": e.uri,
@@ -589,30 +583,19 @@ async def media_audiobook_chapters(
     fully_played: bool | None = None
     duration_s = 0
     try:
-        from app.services.music_assistant import get_ma_client, resolve_ma_provider_and_id
+        from app.services.music_assistant import (
+            fetch_audiobook,
+            get_ma_client,
+            normalize_chapters,
+        )
         ma = await get_ma_client()
 
-        provider, item_id = resolve_ma_provider_and_id(item)
-        if provider and item_id:
-            ma_item = await ma.get_item("audiobook", item_id, provider)
-        else:
-            ma_item = await ma.get_item_by_uri(audiobook_uri)
+        ma_item = await fetch_audiobook(ma, item)
         audiobook_uri = ma_item.uri or audiobook_uri
         resume_position_ms = ma_item.resume_position_ms
         fully_played = ma_item.fully_played
         duration_s = ma_item.duration or 0
-        for ch in ma_item.chapters:
-            start = float(ch.get("start", 0) or 0)
-            end = ch.get("end")
-            end_f = float(end) if end is not None else None
-            chapters.append({
-                "position": int(ch.get("position", 0) or 0),
-                "name": ch.get("name", "") or "",
-                "start": start,
-                "end": end_f,
-                "duration": (end_f - start) if end_f else None,
-            })
-        chapters.sort(key=lambda c: c["position"])
+        chapters = normalize_chapters(ma_item)
     except Exception as exc:
         logger.warning("Failed to fetch audiobook chapters for %s: %s", media_id, exc)
         error = str(exc)

@@ -317,8 +317,19 @@ async def test_web_chapters_resolve_via_source_uri(client, db, web_ma):
         db, title="Harry Potter", media_type=MediaType.audiobook,
         uri="library://audiobook/29",
     )
-    web_ma.audiobook = FakeAudiobook("library://audiobook/29", [])
+    web_ma.audiobook = FakeAudiobook(
+        "library://audiobook/29",
+        chapters=[
+            {"position": 2, "name": "Le survivant", "start": 60, "end": 150},
+            {"position": 1, "name": "Le vivier", "start": 0, "end": 60},
+        ],
+        resume_ms=30_000,
+    )
 
     r = await client.get(f"/media/{item.id}/chapters")
     assert r.status_code == 200
     assert ("get_item", "audiobook", "29", "library") in web_ma.calls
+    # Rendered through the same normalize_chapters() the quick API uses: sorted by position.
+    body = r.text
+    assert "Impossible de charger les chapitres" not in body
+    assert body.index("Le vivier") < body.index("Le survivant")

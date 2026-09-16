@@ -229,6 +229,52 @@ def resolve_ma_provider_and_id(item: Any) -> tuple[str | None, str | None]:
     return provider, item_id
 
 
+async def fetch_podcast_episodes(
+    ma: MusicAssistantClient, item: Any
+) -> list[MAMediaItem]:
+    """Episodes of a local podcast row, in MA's own objects.
+
+    Callers serialise them their own way (HTMX template vs embedded-client JSON); what
+    they must NOT own is *how the item is addressed* — see
+    :func:`resolve_ma_provider_and_id`.
+    """
+    provider, item_id = resolve_ma_provider_and_id(item)
+    if not provider or not item_id:
+        ma_item = await ma.get_item_by_uri(getattr(item, "source_uri", "") or "")
+        provider, item_id = ma_item.provider, ma_item.item_id
+    return await ma.get_podcast_episodes(item_id, provider)
+
+
+async def fetch_audiobook(ma: MusicAssistantClient, item: Any) -> MAMediaItem:
+    """The MA audiobook behind a local row — carries chapters, resume position, duration."""
+    provider, item_id = resolve_ma_provider_and_id(item)
+    if provider and item_id:
+        return await ma.get_item("audiobook", item_id, provider)
+    return await ma.get_item_by_uri(getattr(item, "source_uri", "") or "")
+
+
+def normalize_chapters(ma_item: MAMediaItem) -> list[dict]:
+    """Chapters as plain dicts, sorted by position, with ``end``/``duration`` in seconds.
+
+    MA hands chapters over as raw dicts with stringy numbers; both surfaces need the same
+    arithmetic, so it happens once here.
+    """
+    chapters = []
+    for ch in ma_item.chapters:
+        start = float(ch.get("start", 0) or 0)
+        end = ch.get("end")
+        end_f = float(end) if end is not None else None
+        chapters.append({
+            "position": int(ch.get("position", 0) or 0),
+            "name": ch.get("name", "") or "",
+            "start": start,
+            "end": end_f,
+            "duration": (end_f - start) if end_f else None,
+        })
+    chapters.sort(key=lambda c: c["position"])
+    return chapters
+
+
 # ---------------------------------------------------------------------------
 # WebSocket client
 # ---------------------------------------------------------------------------
