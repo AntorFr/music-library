@@ -84,6 +84,28 @@ TAG_COLOR_CHOICES: list[tuple[str, str, str]] = [
 ]
 TAG_COLOR_ALLOWED = {hex_color for _key, _label, hex_color in TAG_COLOR_CHOICES}
 
+#: Display badge (label, mdi icon, CSS class) per MA provider domain.
+PROVIDER_BADGES: dict[str, tuple[str, str, str]] = {
+    "library": ("Bibliothèque", "mdi-bookshelf", "badge-success"),
+    "spotify": ("Spotify", "mdi-spotify", "badge-primary"),
+    "ytmusic": ("YouTube Music", "mdi-youtube", "badge-danger"),
+    "apple_music": ("Apple Music", "mdi-apple", "badge-surface"),
+    "tidal": ("Tidal", "mdi-music-box", "badge-primary"),
+    "audible": ("Audible", "mdi-headphones", "badge-warning"),
+}
+
+
+def _provider_info(provider: str) -> dict:
+    """Badge fields for a MA provider — instance ids ("spotify--ThNy9kHW") map to their domain."""
+    base = provider.split("--")[0]
+    label, icon, cls = PROVIDER_BADGES.get(base, (base.capitalize(), "mdi-cloud", "badge-surface"))
+    return {
+        "provider_label": label,
+        "provider_icon": icon,
+        "provider_badge": cls,
+        "is_library": provider == "library",
+    }
+
 
 def _base_ctx(request: Request, **extra: Any) -> dict:
     """Build base template context."""
@@ -485,30 +507,6 @@ async def media_detail(request: Request, media_id: str, db: AsyncSession = Depen
     ))
 
 
-def _resolve_ma_provider_and_id(item, expected_kind: str) -> tuple[str | None, str | None]:
-    """Best-effort extraction of MA (provider, item_id) from a local media row.
-
-    Order: metadata_extra.ma_item_id + item.provider, then parsing of source_uri
-    if it follows the canonical ``<provider>://<kind>/<id>`` form.
-    """
-    provider = (item.provider or "").strip() or None
-    item_id: str | None = None
-    extra = getattr(item, "metadata_extra", None) or {}
-    if isinstance(extra, dict):
-        ma_id = extra.get("ma_item_id")
-        if ma_id:
-            item_id = str(ma_id)
-    if not item_id:
-        uri = item.source_uri or ""
-        if "://" in uri:
-            scheme, rest = uri.split("://", 1)
-            parts = rest.split("/", 1)
-            if len(parts) == 2 and parts[0] == expected_kind:
-                provider = provider or scheme
-                item_id = parts[1]
-    return provider, item_id
-
-
 @router.get("/media/{media_id}/episodes", response_class=HTMLResponse)
 async def media_podcast_episodes(
     request: Request, media_id: str, db: AsyncSession = Depends(get_db)
@@ -524,10 +522,10 @@ async def media_podcast_episodes(
     error: str | None = None
     episodes: list[dict] = []
     try:
-        from app.services.music_assistant import get_ma_client
+        from app.services.music_assistant import get_ma_client, resolve_ma_provider_and_id
         ma = await get_ma_client()
 
-        provider, item_id = _resolve_ma_provider_and_id(item, "podcast")
+        provider, item_id = resolve_ma_provider_and_id(item)
         if not provider or not item_id:
             ma_item = await ma.get_item_by_uri(item.source_uri or "")
             provider = ma_item.provider
@@ -576,10 +574,10 @@ async def media_audiobook_chapters(
     fully_played: bool | None = None
     duration_s = 0
     try:
-        from app.services.music_assistant import get_ma_client
+        from app.services.music_assistant import get_ma_client, resolve_ma_provider_and_id
         ma = await get_ma_client()
 
-        provider, item_id = _resolve_ma_provider_and_id(item, "audiobook")
+        provider, item_id = resolve_ma_provider_and_id(item)
         if provider and item_id:
             ma_item = await ma.get_item("audiobook", item_id, provider)
         else:
@@ -946,21 +944,7 @@ async def browse_library(request: Request, media_type: str):
         for item in raw_items:
             d = item.to_dict()
             d["thumb_url_resolved"] = ma.get_item_image_url(item, size=300)
-            # Provider badge info
-            base = item.provider.split("--")[0] if "--" in item.provider else item.provider
-            _PROV = {
-                "library": ("Bibliothèque", "mdi-bookshelf", "badge-success"),
-                "spotify": ("Spotify", "mdi-spotify", "badge-primary"),
-                "ytmusic": ("YouTube Music", "mdi-youtube", "badge-danger"),
-                "apple_music": ("Apple Music", "mdi-apple", "badge-surface"),
-                "tidal": ("Tidal", "mdi-music-box", "badge-primary"),
-                "audible": ("Audible", "mdi-headphones", "badge-warning"),
-            }
-            label, icon, cls = _PROV.get(base, (base.capitalize(), "mdi-cloud", "badge-surface"))
-            d["provider_label"] = label
-            d["provider_icon"] = icon
-            d["provider_badge"] = cls
-            d["is_library"] = item.provider == "library"
+            d.update(_provider_info(item.provider))
             items.append(d)
 
     except HTTPException:
@@ -999,24 +983,6 @@ async def browse_search(request: Request, q: str = Query("", alias="maSearch")):
         from app.services.music_assistant import get_ma_client
         ma = await get_ma_client()
         results = await ma.search(search_q, media_types=media_types, limit=20)
-
-        # Provider display names
-        PROVIDER_LABELS = {
-            "library": ("Bibliothèque", "mdi-bookshelf", "badge-success"),
-            "spotify": ("Spotify", "mdi-spotify", "badge-primary"),
-            "ytmusic": ("YouTube Music", "mdi-youtube", "badge-danger"),
-            "apple_music": ("Apple Music", "mdi-apple", "badge-surface"),
-            "tidal": ("Tidal", "mdi-music-box", "badge-primary"),
-            "audible": ("Audible", "mdi-headphones", "badge-warning"),
-        }
-
-        def _provider_info(provider: str) -> dict:
-            """Return label, icon, badge class for a provider."""
-            # Provider can be like "spotify--ThNy9kHW", extract base name
-            base = provider.split("--")[0] if "--" in provider else provider
-            label, icon, cls = PROVIDER_LABELS.get(base, (base.capitalize(), "mdi-cloud", "badge-surface"))
-            return {"provider_label": label, "provider_icon": icon, "provider_badge": cls,
-                    "is_library": provider == "library"}
 
         def serialize(items):
             # Sort: library items first, then by name

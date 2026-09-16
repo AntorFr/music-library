@@ -197,6 +197,39 @@ class MASearchResults:
 
 
 # ---------------------------------------------------------------------------
+# Addressing a local media row in Music Assistant
+# ---------------------------------------------------------------------------
+
+def resolve_ma_provider_and_id(item: Any) -> tuple[str | None, str | None]:
+    """(provider, item_id) to re-query Music Assistant about a local media row.
+
+    Prefer the ``source_uri``: it is the canonical MA URI (e.g. ``library://audiobook/29``),
+    so its scheme is the MA provider and the trailing segment is the item id — a
+    self-consistent pair. The stored ``provider`` column can be the *origin* provider
+    (audible/spotify) while ``ma_item_id`` is the *library* id; combining those two is wrong
+    and makes MA look up a non-existent item (``shows/88 not found``, ``ASIN 29 not present``).
+    Fall back to provider + ma_item_id only when the source_uri can't be parsed.
+
+    ``item`` is duck-typed: anything exposing ``source_uri``, ``provider`` and
+    ``metadata_extra`` (a :class:`~app.models.media.Media` row, in practice).
+    """
+    uri = getattr(item, "source_uri", "") or ""
+    if "://" in uri:
+        scheme, rest = uri.split("://", 1)
+        parts = rest.split("/", 1)
+        if len(parts) == 2 and parts[1]:
+            return scheme, parts[1]
+    provider = (getattr(item, "provider", "") or "").strip() or None
+    extra = getattr(item, "metadata_extra", None) or {}
+    item_id = (
+        str(extra["ma_item_id"])
+        if isinstance(extra, dict) and extra.get("ma_item_id")
+        else None
+    )
+    return provider, item_id
+
+
+# ---------------------------------------------------------------------------
 # WebSocket client
 # ---------------------------------------------------------------------------
 

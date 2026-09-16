@@ -27,9 +27,12 @@ class FakeEpisode:
 
 
 class FakeAudiobook:
-    def __init__(self, uri, chapters):
+    def __init__(self, uri, chapters, duration=3600, resume_ms=None, fully=False):
         self.uri = uri
         self.chapters = chapters
+        self.duration = duration
+        self.resume_position_ms = resume_ms
+        self.fully_played = fully
 
 
 class FakeMA:
@@ -264,18 +267,58 @@ async def test_now_playing(client):
 
 def test_resolve_prefers_source_uri_over_provider():
     """library://audiobook/29 must resolve to (library, 29), not (audible, 29)."""
-    from app.api.quick import _resolve_ma_provider_and_id
+    from app.services.music_assistant import resolve_ma_provider_and_id
 
     class It:
         source_uri = "library://audiobook/29"
         provider = "audible"  # origin provider — must NOT win over the source_uri scheme
         metadata_extra = {"ma_item_id": "29"}
 
-    assert _resolve_ma_provider_and_id(It()) == ("library", "29")
+    assert resolve_ma_provider_and_id(It()) == ("library", "29")
 
     class NoUri:
         source_uri = ""
         provider = "spotify"
         metadata_extra = {"ma_item_id": "abc"}
 
-    assert _resolve_ma_provider_and_id(NoUri()) == ("spotify", "abc")
+    assert resolve_ma_provider_and_id(NoUri()) == ("spotify", "abc")
+
+
+# --- Web UI (HTMX partials) share the same resolver ------------------------
+
+@pytest.fixture
+def web_ma(monkeypatch, fake_ma):
+    """The HTMX views import get_ma_client directly, so dependency_overrides misses them."""
+    async def _get(*_a, **_k):
+        return fake_ma
+
+    monkeypatch.setattr("app.services.music_assistant.get_ma_client", _get)
+    return fake_ma
+
+
+@pytest.mark.asyncio
+async def test_web_episodes_resolve_via_source_uri(client, db, web_ma):
+    """Regression: library://podcast/88 + provider=spotify asked MA for `shows/88`."""
+    item = await _create(
+        db, title="Wyktaur", media_type=MediaType.podcast, uri="library://podcast/88"
+    )
+    web_ma.episodes = [FakeEpisode("Ep1", "library://episode/e1", 1)]
+
+    r = await client.get(f"/media/{item.id}/episodes")
+    assert r.status_code == 200
+    assert ("episodes", "88", "library") in web_ma.calls
+    assert ("episodes", "88", "spotify") not in web_ma.calls
+
+
+@pytest.mark.asyncio
+async def test_web_chapters_resolve_via_source_uri(client, db, web_ma):
+    """Same pairing bug on the audiobook side: `ASIN 29 not present`."""
+    item = await _create(
+        db, title="Harry Potter", media_type=MediaType.audiobook,
+        uri="library://audiobook/29",
+    )
+    web_ma.audiobook = FakeAudiobook("library://audiobook/29", [])
+
+    r = await client.get(f"/media/{item.id}/chapters")
+    assert r.status_code == 200
+    assert ("get_item", "audiobook", "29", "library") in web_ma.calls

@@ -60,6 +60,21 @@ Commandes WebSocket utilisées :
 | Seek | `player_queues/seek` | `queue_id`, `position` |
 | Images | HTTP `/imageproxy` | `path`, `provider`, `size` |
 
+### Le couple `(provider, item_id)` ne se bricole pas
+
+Toute commande qui prend `provider_instance_id_or_domain` + `item_id` exige une
+paire **cohérente**. Or une ligne `media` locale stocke deux choses différentes :
+
+- `source_uri` — l'URI canonique MA, p. ex. `library://podcast/88` ;
+- `provider` — le provider d'**origine** (`spotify`, `audible`), déduit du premier
+  `provider_mapping` à l'import.
+
+Croiser `provider=spotify` avec l'id *library* `88` fait chercher à MA un objet qui
+n'existe pas (`shows/88 not found`, `ASIN 29 not present`). La résolution passe donc
+par `source_uri` — voir `resolve_ma_provider_and_id()` dans
+`app/services/music_assistant.py`, seule source pour les deux appelants
+(`app/api/views.py` et `app/api/quick.py`).
+
 ## Procédure pour une prochaine version
 
 1. Identifier la vraie dernière version.
