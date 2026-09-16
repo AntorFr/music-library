@@ -12,8 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.schemas.media import NowPlaying
-from app.services import cover_service, media_service
+from app.services import cover_service
 from app.services.auth_service import CurrentUser, get_current_user
+from app.services.ma_import import import_ma_item
 from app.services.music_assistant import MusicAssistantClient, get_ma_client
 
 router = APIRouter(prefix="/api/v1/ma", tags=["music-assistant"])
@@ -410,54 +411,7 @@ async def ma_import_item(
 
     Récupère les infos + miniature depuis MA et crée l'entrée dans la DB locale.
     """
-    try:
-        item = await ma.get_item_by_uri(uri)
-    except Exception as exc:
-        raise HTTPException(400, detail=f"Impossible de récupérer l'élément: {exc}")
-
-    # Map MA media_type to our MediaType
-    from app.models.media import MediaType
-    type_map = {
-        "track": MediaType.track,
-        "album": MediaType.album,
-        "playlist": MediaType.playlist,
-        "radio": MediaType.radio,
-        "audiobook": MediaType.audiobook,
-        "podcast": MediaType.podcast,
-    }
-    media_type = type_map.get(item.media_type, MediaType.track)
-
-    # Determine provider from provider_mappings or item
-    provider = item.provider
-    if item.provider_mappings:
-        provider = item.provider_mappings[0].get("provider_domain", provider)
-
-    from app.schemas.media import MediaCreate
-    create_data = MediaCreate(
-        title=item.name,
-        media_type=media_type,
-        source_uri=item.uri,
-        provider=provider,
-        cover_url=ma.get_item_image_url(item, size=0),
-        duration_min=item.duration // 60 if item.duration else None,
-        description=item.description or None,
-        metadata_extra={
-            "artists": item.artist_str,
-            "album": item.album_name,
-            "ma_item_id": item.item_id,
-        },
-    )
-
-    media, _created = await media_service.create_media(
-        db, create_data, force_owner_value=user.owner_value
-    )
-
-    # Also try to download and cache the thumbnail locally
-    thumb_url = ma.get_item_image_url(item, size=300)
-    if thumb_url:
-        local_path = await cover_service.download_and_save_cover(media.id, thumb_url)
-        if local_path:
-            media.cover_local = local_path
+    media = await import_ma_item(db, ma, uri, owner_value=user.owner_value)
 
     from app.schemas.media import MediaRead
     return MediaRead.model_validate(media)

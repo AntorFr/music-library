@@ -21,6 +21,7 @@ from app.models.media import MediaType
 from app.schemas.media import MediaCreate, MediaUpdate
 from app.services import cover_service, media_service, rfid_service
 from app.services.auth_service import get_current_user, normalize_owner
+from app.services.ma_import import import_ma_item
 from app.services.permissions import (
     OWNER_CATEGORY,
     ensure_media_access,
@@ -1055,54 +1056,11 @@ async def browse_import(
 ):
     """Import a MA item into the local catalogue — returns JSON for JS fetch."""
     from app.services.music_assistant import get_ma_client
-    ma = await get_ma_client()
 
-    try:
-        item = await ma.get_item_by_uri(uri)
-    except Exception as exc:
-        raise HTTPException(400, detail=f"Impossible de récupérer l'élément: {exc}")
-
-    type_map = {
-        "track": MediaType.track,
-        "album": MediaType.album,
-        "playlist": MediaType.playlist,
-        "radio": MediaType.radio,
-        "audiobook": MediaType.audiobook,
-        "podcast": MediaType.podcast,
-    }
-    m_type = type_map.get(item.media_type, MediaType.track)
-
-    provider = item.provider
-    if item.provider_mappings:
-        provider = item.provider_mappings[0].get("provider_domain", provider)
-
-    data = MediaCreate(
-        title=item.name,
-        media_type=m_type,
-        source_uri=item.uri,
-        provider=provider,
-        cover_url=ma.get_item_image_url(item, size=0),
-        duration_min=item.duration // 60 if item.duration else None,
-        description=item.description or None,
-        metadata_extra={
-            "artists": item.artist_str,
-            "album": item.album_name,
-            "ma_item_id": item.item_id,
-        },
+    media = await import_ma_item(
+        db, await get_ma_client(), uri,
+        owner_value=get_current_user(request).owner_value,
     )
-
-    media, _created = await media_service.create_media(
-        db, data, force_owner_value=get_current_user(request).owner_value
-    )
-
-    # Download cover
-    thumb_url = ma.get_item_image_url(item, size=300)
-    if thumb_url:
-        local = await cover_service.download_and_save_cover(media.id, thumb_url)
-        if local:
-            media.cover_local = local
-            await db.commit()
-
     return {"id": media.id, "title": media.title}
 
 
