@@ -1,0 +1,85 @@
+{#
+  Saisie manuelle — pour ce que Music Assistant ne connaît pas : un flux RSS,
+  une webradio, une URL directe. v1 en faisait une page et une entrée de menu ;
+  c'est un geste qu'on fait une fois sur vingt, il vit ici en modale.
+#}
+<div class="modal-scrim" id="manualScrim" hidden>
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="manualTitle">
+    <form method="POST" action="/media/new">
+      <div class="modal-head">
+        <h3 id="manualTitle" class="m-0"><i class="mdi mdi-pencil-box-outline"></i> Saisie manuelle</h3>
+        <button type="button" class="btn btn-icon" onclick="closeManualAdd()" aria-label="Fermer">
+          <i class="mdi mdi-close"></i>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <p class="text-muted text-sm mb-2">
+          Pour ce qui n'est pas dans Music Assistant : un flux RSS, une webradio, une URL directe.
+        </p>
+
+        <div class="form-group">
+          <label class="form-label" for="manualTitleInput">Titre *</label>
+          <input type="text" id="manualTitleInput" name="title" class="form-control" required
+                 placeholder="ex: La Grimm Académie">
+        </div>
+
+        <div class="d-flex gap-2" style="flex-wrap: wrap;">
+          <div class="form-group flex-1" style="min-width: 150px;">
+            <label class="form-label" for="manualType">Type *</label>
+            <select id="manualType" name="media_type" class="form-control" required>
+              {% for t in media_types %}
+              <option value="{{ t.value }}">{{ type_labels.get(t.value, t.value) }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group flex-1" style="min-width: 150px;">
+            <label class="form-label" for="manualProvider">Fournisseur *</label>
+            <input type="text" id="manualProvider" name="provider" class="form-control" required
+                   value="manuel">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="manualUri">URI source *</label>
+          <input type="text" id="manualUri" name="source_uri" class="form-control" required
+                 placeholder="https://… ou spotify://podcast/…"
+                 style="font-family: monospace; font-size: .85rem;">
+          <div class="text-muted text-sm mt-1">
+            Flux RSS, URL de stream, ou URI Music Assistant.
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="manualCover">Pochette (URL)</label>
+          <input type="url" id="manualCover" name="cover_url" class="form-control"
+                 placeholder="https://…">
+        </div>
+
+        {% if available_tags %}
+        <div class="form-group">
+          <label class="form-label">Tags</label>
+          <div class="manual-tags">
+            {% for tag in available_tags %}
+            <label class="manual-tag">
+              <input type="checkbox" name="tag_ids" value="{{ tag.id }}">
+              <span class="badge badge-surface">
+                <i class="mdi mdi-tag" style="color: {{ cat_colors.get(tag.category, 'var(--primary)') }};"></i>
+                {{ cat_labels.get(tag.category, tag.category) }} : {{ tag.value | capitalize }}
+              </span>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+      </div>
+
+      <div class="modal-foot">
+        <button type="button" class="btn btn-outline" onclick="closeManualAdd()">Annuler</button>
+        <button type="submit" class="btn btn-primary">
+          <i class="mdi mdi-plus"></i> Ajouter au catalogue
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

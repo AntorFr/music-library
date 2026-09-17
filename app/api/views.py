@@ -10,12 +10,14 @@ from __future__ import annotations
 import logging
 import math
 from typing import Any
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.models.media import MediaType
 from app.schemas.media import MediaCreate, MediaUpdate
@@ -108,6 +110,32 @@ def _provider_info(provider: str) -> dict:
     }
 
 
+async def _ma_status() -> dict:
+    """Best-effort health of the Music Assistant link, for the Système tab.
+
+    Reports the provider instances MA holds but cannot load: one of those silently
+    returns an empty episode list instead of failing (see docs/MUSIC_ASSISTANT_COMPATIBILITY.md).
+    """
+    status: dict[str, Any] = {"reachable": False, "players": 0, "broken_providers": []}
+    try:
+        from app.services.music_assistant import get_ma_client
+        ma = await get_ma_client()
+        status["players"] = len(await ma.get_players())
+        status["reachable"] = True
+        try:
+            configs = await ma._send_command("config/providers")
+            status["broken_providers"] = [
+                {"name": c.get("name") or c.get("instance_id"), "error": c.get("last_error")}
+                for c in (configs or [])
+                if c.get("enabled") and c.get("last_error")
+            ]
+        except Exception as exc:
+            logger.info("MA provider configs unavailable: %s", exc)
+    except Exception as exc:
+        logger.info("Music Assistant unreachable: %s", exc)
+    return status
+
+
 def _base_ctx(request: Request, **extra: Any) -> dict:
     """Build base template context."""
     return {
@@ -167,26 +195,6 @@ def _parse_tag_input(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/rfid", response_class=HTMLResponse)
-async def rfid_page(request: Request, db: AsyncSession = Depends(get_db)):
-    ensure_parent(get_current_user(request))
-    tags = await rfid_service.list_rfid_tags(db)
-    view = [
-        {
-            "uid": t.uid,
-            "name": t.name,
-            "media_id": t.media_id,
-            "media_title": t.media.title if getattr(t, "media", None) else None,
-        }
-        for t in tags
-    ]
-    return templates.TemplateResponse(
-        request,
-        "rfid/list.html",
-        _base_ctx(request, tags=view),
-    )
-
-
 @router.post("/rfid")
 async def rfid_upsert(
     request: Request,
@@ -197,7 +205,7 @@ async def rfid_upsert(
     ensure_parent(get_current_user(request))
     await rfid_service.upsert_rfid_tag(db, uid=uid, name=name)
     await db.commit()
-    return RedirectResponse("/rfid", status_code=303)
+    return RedirectResponse("/settings?tab=rfid", status_code=303)
 
 
 # ---------------------------------------------------------------------------
@@ -213,7 +221,8 @@ async def web_manifest():
             "name": "Music Library",
             "short_name": "Music",
             "description": "Lanceur rapide familial pour Music Library",
-            "start_url": "/quick",
+            # Le lanceur est la racine depuis la v2.
+            "start_url": "/",
             "scope": "/",
             "display": "standalone",
             "background_color": "#181818",
@@ -245,12 +254,13 @@ async def web_manifest():
     )
 
 
-@router.get("/quick", response_class=HTMLResponse)
-async def quick_launcher(
+@router.get("/", response_class=HTMLResponse)
+async def listen_page(
     request: Request,
     owner: str | None = None,
     db: AsyncSession = Depends(get_db),
 ):
+    """Home: the launcher. Pick a profile and a speaker, tap a cover, it plays."""
     user = get_current_user(request)
     owner_tags = await list_tags(db, category="owner")
     owners = sorted({t.value for t in owner_tags}, key=str.casefold)
@@ -285,9 +295,9 @@ async def quick_launcher(
         "selected_owner": selected_owner,
     }
 
-    return templates.TemplateResponse(request, "quick/index.html", _base_ctx(
+    return templates.TemplateResponse(request, "listen/index.html", _base_ctx(
         request,
-        active_nav="quick",
+        active_nav="listen",
         items=items,
         owners=owners,
         selected_owner=selected_owner,
@@ -297,53 +307,11 @@ async def quick_launcher(
     ))
 
 
-@router.get("/", response_class=HTMLResponse)
-async def home(request: Request, db: AsyncSession = Depends(get_db)):
-    user = get_current_user(request)
-    scope = user.view_owner_keys
-
-    # Stats
-    all_items, total = await media_service.list_media(db, page=1, page_size=1, owner_scope=scope)
-    _, active_count = await media_service.list_media(db, page=1, page_size=1, owner_scope=scope)
-
-    # Count by type
-    by_type: dict[str, int] = {}
-    for mt in MediaType:
-        _, cnt = await media_service.list_media(
-            db, media_type=mt, page=1, page_size=1, owner_scope=scope
-        )
-        if cnt > 0:
-            by_type[mt.value] = cnt
-
-    # Tags count
-    all_tags = await list_tags(db)
-
-    # Players count (best effort)
-    players_count = 0
-    try:
-        from app.services.music_assistant import get_ma_client
-        ma = await get_ma_client()
-        players = await ma.get_players()
-        players_count = len(players)
-    except Exception:
-        pass
-
-    # Recent items
-    recent_items, _ = await media_service.list_media(db, page=1, page_size=12, owner_scope=scope)
-
-    stats = {
-        "total": total,
-        "active": active_count,  # all are counted for now
-        "tags": len(all_tags),
-        "players": players_count,
-        "by_type": by_type,
-    }
-
-    return templates.TemplateResponse(request, "index.html", _base_ctx(
-        request,
-        stats=stats,
-        recent=recent_items,
-    ))
+@router.get("/quick")
+async def quick_redirect(owner: str | None = None):
+    """The launcher moved to the root in v2 — keep old links and shortcuts working."""
+    target = f"/?owner={quote(owner)}" if owner else "/"
+    return RedirectResponse(target, status_code=302)
 
 
 # ---------------------------------------------------------------------------
@@ -420,22 +388,6 @@ async def media_list(
 # ---------------------------------------------------------------------------
 # Media — Detail
 # ---------------------------------------------------------------------------
-
-@router.get("/media/new", response_class=HTMLResponse)
-async def media_new_form(request: Request, db: AsyncSession = Depends(get_db)):
-    all_tags = await list_tags(db)
-    categories = await list_tag_categories(db)
-    cat_labels = {c.slug: c.label for c in categories}
-    cat_colors = {c.slug: c.color for c in categories if getattr(c, "color", None)}
-    return templates.TemplateResponse(request, "media/form.html", _base_ctx(
-        request,
-        item=None,
-        available_tags=all_tags,
-        cat_labels=cat_labels,
-        cat_colors=cat_colors,
-        media_types=list(MediaType),
-    ))
-
 
 @router.post("/media/new")
 async def media_create(
@@ -842,21 +794,59 @@ async def media_update(
 # Tags
 # ---------------------------------------------------------------------------
 
-@router.get("/tags", response_class=HTMLResponse)
-async def tags_page(request: Request, db: AsyncSession = Depends(get_db)):
+@router.get("/settings", response_class=HTMLResponse)
+async def settings_page(
+    request: Request,
+    tab: str = Query("tags", pattern="^(tags|rfid|system)$"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Parent-only administration: tags, RFID cards and system health, as tabs.
+
+    v1 spent two top-level nav entries on surfaces opened a few times a year.
+    """
     ensure_parent(get_current_user(request))
+
     all_tags = await list_tags(db)
     categories = await list_tag_categories(db)
     cat_labels = {c.slug: c.label for c in categories}
     cat_colors = {c.slug: c.color for c in categories if getattr(c, "color", None)}
-    return templates.TemplateResponse(request, "tags/list.html", _base_ctx(
+
+    rfid_tags = await rfid_service.list_rfid_tags(db)
+    rfid_view = [
+        {
+            "uid": t.uid,
+            "name": t.name,
+            "media_id": t.media_id,
+            "media_title": t.media.title if getattr(t, "media", None) else None,
+        }
+        for t in rfid_tags
+    ]
+
+    return templates.TemplateResponse(request, "settings.html", _base_ctx(
         request,
+        active_nav="settings",
+        tab=tab,
         tags=all_tags,
         categories=categories,
         cat_labels=cat_labels,
         cat_colors=cat_colors,
         tag_color_choices=TAG_COLOR_CHOICES,
+        rfid_tags=rfid_view,
+        ma_status=await _ma_status(),
+        app_version=settings.app_version,
     ))
+
+
+@router.get("/tags")
+async def tags_redirect():
+    """Merged into /settings in v2."""
+    return RedirectResponse("/settings?tab=tags", status_code=302)
+
+
+@router.get("/rfid")
+async def rfid_redirect():
+    """Merged into /settings in v2."""
+    return RedirectResponse("/settings?tab=rfid", status_code=302)
 
 
 @router.post("/tags")
@@ -869,7 +859,7 @@ async def tags_create(
     ensure_parent(get_current_user(request))
     await create_tag(db, category, value)
     await db.commit()
-    return RedirectResponse("/tags", status_code=303)
+    return RedirectResponse("/settings?tab=tags", status_code=303)
 
 
 @router.post("/tags/categories")
@@ -891,7 +881,7 @@ async def tags_category_create(
     except ValueError:
         raise HTTPException(400, detail="Couleur invalide")
     await db.commit()
-    return RedirectResponse("/tags", status_code=303)
+    return RedirectResponse("/settings?tab=tags", status_code=303)
 
 
 @router.delete("/tags/categories/{slug}")
@@ -914,8 +904,23 @@ async def tags_category_delete(
 # ---------------------------------------------------------------------------
 
 @router.get("/browse", response_class=HTMLResponse)
-async def browse_page(request: Request):
-    return templates.TemplateResponse(request, "ma/browse.html", _base_ctx(request))
+async def browse_page(request: Request, db: AsyncSession = Depends(get_db)):
+    """The "Ajouter" entry: adding goes through Music Assistant in practice.
+
+    The hand-typed form — an RSS feed, a stream URL — is a modal here rather than
+    the page the nav used to point at. Open to children too: their addition is
+    auto-tagged to their own profile (see media_service.create_media).
+    """
+    all_tags = await list_tags(db)
+    categories = await list_tag_categories(db)
+    return templates.TemplateResponse(request, "ma/browse.html", _base_ctx(
+        request,
+        active_nav="add",
+        available_tags=all_tags,
+        cat_labels={c.slug: c.label for c in categories},
+        cat_colors={c.slug: c.color for c in categories if getattr(c, "color", None)},
+        media_types=list(MediaType),
+    ))
 
 
 @router.get("/browse/library/{media_type}", response_class=HTMLResponse)
@@ -1051,17 +1056,3 @@ async def browse_import(
 # Players
 # ---------------------------------------------------------------------------
 
-@router.get("/players", response_class=HTMLResponse)
-async def players_page(request: Request):
-    players = []
-    try:
-        from app.services.music_assistant import get_ma_client
-        ma = await get_ma_client()
-        raw = await ma.get_players()
-        players = [p.to_dict() for p in raw]
-    except Exception as e:
-        logger.error("Failed to fetch players: %s", e)
-
-    return templates.TemplateResponse(request, "ma/players.html", _base_ctx(
-        request, players=players,
-    ))

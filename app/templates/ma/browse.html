@@ -1,8 +1,13 @@
 {% extends "base.html" %}
-{% set active_nav = "browse" %}
+{% set active_nav = "add" %}
 
-{% block title %}Parcourir Music Assistant — Music Library{% endblock %}
-{% block topbar_title %}Parcourir Music Assistant{% endblock %}
+{#
+  v2 : c'est l'entrée « Ajouter ». Dans les faits on ajoute depuis Music
+  Assistant — le menu pointe donc ici, et la saisie manuelle est une modale.
+  Page ouverte aux enfants : leur ajout est auto-tagué à leur propre profil.
+#}
+{% block title %}Ajouter — Music Library{% endblock %}
+{% block topbar_title %}Ajouter{% endblock %}
 
 {% block topbar_actions %}
 <div class="search-bar">
@@ -51,7 +56,13 @@
           onclick="browseLibrary('podcasts', this)">
     <i class="mdi mdi-podcast"></i> Podcasts
   </button>
+  <div class="flex-1"></div>
+  <button type="button" class="btn btn-outline btn-sm" onclick="openManualAdd()">
+    <i class="mdi mdi-pencil-box-outline"></i> Saisie manuelle
+  </button>
 </div>
+
+{% include "components/manual_add_modal.html" %}
 
 <div id="ma-results">
   <div class="empty-state">
@@ -124,9 +135,22 @@ async function importItem(uri, btn) {
   }
 }
 
-// Auto-load "Tous" on page load (shows placeholder)
-document.addEventListener('DOMContentLoaded', () => {
-  // Default to "Tous" tab active — no auto-fetch
+// --- Saisie manuelle (modale) ---
+function openManualAdd() {
+  document.getElementById('manualScrim').hidden = false;
+  document.getElementById('manualTitleInput').focus();
+}
+
+function closeManualAdd() {
+  document.getElementById('manualScrim').hidden = true;
+}
+
+document.getElementById('manualScrim').addEventListener('click', (e) => {
+  if (e.target.id === 'manualScrim') closeManualAdd();
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeManualAdd();
 });
 </script>
 {% endblock %}

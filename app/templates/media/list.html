@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% set active_nav = "media" %}
+{% set active_nav = "catalog" %}
 
 {% block title %}Catalogue — Music Library{% endblock %}
 {% block topbar_title %}Catalogue{% endblock %}
@@ -75,7 +75,7 @@
   {% include "components/media_grid.html" %}
 </div>
 
-<a href="/media/new" class="btn-fab" title="Ajouter un média">
+<a href="/browse" class="btn-fab" title="Ajouter un média">
   <i class="mdi mdi-plus"></i>
 </a>
 {% endblock %}

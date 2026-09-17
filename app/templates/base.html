@@ -43,41 +43,31 @@
         <span class="sidebar-title">Music Library</span>
       </div>
 
+      {#
+        v2 — quatre entrées, une par question que l'utilisateur se pose :
+        « je veux écouter », « qu'est-ce qu'on a ? », « j'en ajoute », « je règle ».
+        Ajouter pointe sur Music Assistant : c'est par là qu'on ajoute en pratique,
+        et l'entrée reste visible des enfants (leur ajout s'auto-tague à leur profil).
+      #}
       <nav class="sidebar-nav">
-        <a href="/" class="{% if active_nav == 'home' %}active{% endif %}">
-          <i class="mdi mdi-home"></i>
-          <span>Accueil</span>
+        <a href="/" class="{% if active_nav == 'listen' %}active{% endif %}">
+          <i class="mdi mdi-play-circle"></i>
+          <span>Écouter</span>
         </a>
-        <a href="/media" class="{% if active_nav == 'media' %}active{% endif %}">
+        <a href="/media" class="{% if active_nav == 'catalog' %}active{% endif %}">
           <i class="mdi mdi-music-box-multiple"></i>
           <span>Catalogue</span>
         </a>
-        <a href="/media/new" class="{% if active_nav == 'media_new' %}active{% endif %}">
+        <a href="/browse" class="{% if active_nav == 'add' %}active{% endif %}">
           <i class="mdi mdi-plus-circle"></i>
           <span>Ajouter</span>
         </a>
-        <a href="/quick" class="{% if active_nav == 'quick' %}active{% endif %}">
-          <i class="mdi mdi-gesture-tap-button"></i>
-          <span>Lanceur</span>
-        </a>
         {% if current_user is not defined or current_user.is_parent %}
-        <a href="/tags" class="{% if active_nav == 'tags' %}active{% endif %}">
-          <i class="mdi mdi-tag-multiple"></i>
-          <span>Tags</span>
-        </a>
-        <a href="/rfid" class="{% if active_nav == 'rfid' %}active{% endif %}">
-          <i class="mdi mdi-nfc"></i>
-          <span>RFID</span>
+        <a href="/settings" class="{% if active_nav == 'settings' %}active{% endif %}">
+          <i class="mdi mdi-cog"></i>
+          <span>Réglages</span>
         </a>
         {% endif %}
-        <a href="/browse" class="{% if active_nav == 'browse' %}active{% endif %}">
-          <i class="mdi mdi-cloud-search"></i>
-          <span>Parcourir MA</span>
-        </a>
-        <a href="/players" class="{% if active_nav == 'players' %}active{% endif %}">
-          <i class="mdi mdi-speaker"></i>
-          <span>Lecteurs</span>
-        </a>
       </nav>
 
       <div class="sidebar-footer">
@@ -112,8 +102,28 @@
       <div class="page-content" id="main">
         {% block content %}{% endblock %}
       </div>
+
+      {% block below_content %}{% endblock %}
     </main>
   </div>
+
+  {# Sur téléphone la nav descend en bas : le pouce y arrive, la sidebar non. #}
+  <nav class="tabbar" aria-label="Navigation principale">
+    <a href="/" class="{% if active_nav == 'listen' %}active{% endif %}">
+      <i class="mdi mdi-play-circle"></i><span>Écouter</span>
+    </a>
+    <a href="/media" class="{% if active_nav == 'catalog' %}active{% endif %}">
+      <i class="mdi mdi-music-box-multiple"></i><span>Catalogue</span>
+    </a>
+    <a href="/browse" class="{% if active_nav == 'add' %}active{% endif %}">
+      <i class="mdi mdi-plus-circle"></i><span>Ajouter</span>
+    </a>
+    {% if current_user is not defined or current_user.is_parent %}
+    <a href="/settings" class="{% if active_nav == 'settings' %}active{% endif %}">
+      <i class="mdi mdi-cog"></i><span>Réglages</span>
+    </a>
+    {% endif %}
+  </nav>
 
   <script>
     // --- Sidebar mobile toggle ---

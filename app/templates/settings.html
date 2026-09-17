@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% set active_nav = "settings" %}
+
+{% block title %}Réglages — Music Library{% endblock %}
+{% block topbar_title %}Réglages{% endblock %}
+
+{#
+  v2 : Tags et RFID occupaient deux entrées de menu pour des surfaces ouvertes
+  quelques fois par an. Elles deviennent deux onglets, et le menu passe de huit
+  entrées à quatre. Les onglets sont rendus côté serveur (?tab=…) : pas de JS,
+  et chaque onglet est une URL qu'on peut mettre en favori.
+#}
+{% block content %}
+<div class="settings-tabs" role="tablist">
+  <a href="/settings?tab=tags" role="tab"
+     aria-selected="{{ 'true' if tab == 'tags' else 'false' }}"
+     class="{% if tab == 'tags' %}active{% endif %}">
+    <i class="mdi mdi-tag-multiple"></i> Tags
+  </a>
+  <a href="/settings?tab=rfid" role="tab"
+     aria-selected="{{ 'true' if tab == 'rfid' else 'false' }}"
+     class="{% if tab == 'rfid' %}active{% endif %}">
+    <i class="mdi mdi-nfc"></i> RFID
+  </a>
+  <a href="/settings?tab=system" role="tab"
+     aria-selected="{{ 'true' if tab == 'system' else 'false' }}"
+     class="{% if tab == 'system' %}active{% endif %}">
+    <i class="mdi mdi-server"></i> Système
+  </a>
+</div>
+
+{% if tab == 'tags' %}
+  {% include "settings/_tags.html" %}
+{% elif tab == 'rfid' %}
+  {% include "settings/_rfid.html" %}
+{% else %}
+  {% include "settings/_system.html" %}
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% include "settings/_scripts.html" %}
+{% endblock %}

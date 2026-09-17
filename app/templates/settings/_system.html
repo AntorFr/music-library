@@ -1,0 +1,66 @@
+{# Onglet Système — du diagnostic, pas des statistiques : chaque ligne appelle une action. #}
+<div class="d-flex gap-3" style="align-items: flex-start; flex-wrap: wrap;">
+  <div class="flex-1" style="min-width: 320px; display: flex; flex-direction: column; gap: 1rem;">
+
+    <div class="card">
+      <div class="card-body">
+        <h3 class="mb-3"><i class="mdi mdi-server"></i> Music Assistant</h3>
+
+        {% if ma_status.reachable %}
+        <div class="d-flex align-center gap-2 mb-2">
+          <span class="badge badge-success"><i class="mdi mdi-check-circle"></i> Joignable</span>
+          <span class="text-muted text-sm">
+            {{ ma_status.players }} enceinte{{ 's' if ma_status.players != 1 else '' }}
+          </span>
+        </div>
+        {% else %}
+        <div class="alert alert-warning mb-2">
+          Music Assistant ne répond pas. Le lanceur et l'ajout sont indisponibles
+          tant que la connexion n'est pas rétablie.
+        </div>
+        {% endif %}
+
+        {% if ma_status.broken_providers %}
+        <div class="alert alert-warning">
+          <strong>
+            {{ ma_status.broken_providers|length }}
+            compte{{ 's' if ma_status.broken_providers|length != 1 else '' }}
+            à ré-authentifier
+          </strong>
+          <div class="text-sm mt-1">
+            Music Assistant garde ces comptes activés alors qu'il n'arrive plus à les charger.
+            Quand l'un d'eux est le premier fournisseur d'un média, MA renvoie une liste
+            <em>vide</em> plutôt qu'une erreur — le podcast paraît sans épisodes.
+          </div>
+          <ul style="margin: .5rem 0 0 1.1rem;">
+            {% for prov in ma_status.broken_providers %}
+            <li class="text-sm">
+              <strong>{{ prov.name }}</strong>
+              <span class="text-muted">— {{ prov.error }}</span>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% elif ma_status.reachable %}
+        <div class="text-muted text-sm">
+          <i class="mdi mdi-check"></i> Tous les comptes fournisseurs se chargent.
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-body">
+        <h3 class="mb-3"><i class="mdi mdi-information-outline"></i> Application</h3>
+        <div class="d-flex align-center gap-2">
+          <span class="badge badge-surface">version {{ app_version }}</span>
+          <a href="/api/v1/health" target="_blank" rel="noopener"
+             class="text-sm d-flex align-center gap-1">
+            <i class="mdi mdi-heart-pulse"></i> Santé de l'API
+          </a>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>

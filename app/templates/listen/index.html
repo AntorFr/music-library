@@ -1,6 +1,7 @@
 {% extends "base.html" %}
+{% set active_nav = "listen" %}
 
-{% block title %}Lanceur — Music Library{% endblock %}
+{% block title %}Écouter — Music Library{% endblock %}
 {% block home_screen_name %}Music{% endblock %}
 
 {% block head_extra %}
@@ -10,7 +11,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 {% endblock %}
 
-{% block topbar_title %}Lanceur{% endblock %}
+{% block topbar_title %}Écouter{% endblock %}
 
 {% block content %}
 <script id="quick-data" type="application/json">{{ quick_data | tojson }}</script>
@@ -170,7 +171,7 @@
     }
 
     if (!selectedOwner && savedOwner) {
-      window.location.href = `/quick?owner=${encodeURIComponent(savedOwner)}`;
+      window.location.href = `/?owner=${encodeURIComponent(savedOwner)}`;
       return;
     }
     if (selectedOwner) {
@@ -193,11 +194,11 @@
       el.addEventListener('change', () => {
         if (!el.value) {
           localStorage.removeItem(QUICK_OWNER_KEY);
-          window.location.href = '/quick';
+          window.location.href = '/';
           return;
         }
         localStorage.setItem(QUICK_OWNER_KEY, el.value);
-        window.location.href = `/quick?owner=${encodeURIComponent(el.value)}`;
+        window.location.href = `/?owner=${encodeURIComponent(el.value)}`;
       });
     }
 

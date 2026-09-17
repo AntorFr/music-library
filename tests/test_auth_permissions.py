@@ -126,7 +126,7 @@ def test_other_users_are_children():
 @pytest.mark.asyncio
 async def test_dev_mode_is_open(client: AsyncClient):
     # No OIDC settings → everything acts as parent, no login.
-    response = await client.get("/tags")
+    response = await client.get("/settings")
     assert response.status_code == 200
 
 
@@ -284,7 +284,7 @@ async def test_child_cannot_remove_own_owner_tag(client: AsyncClient, db: AsyncS
 @pytest.mark.asyncio
 async def test_child_cannot_manage_tags(client: AsyncClient, db: AsyncSession, oidc_on):
     _login_child(client, "lea")
-    page = await client.get("/tags")
+    page = await client.get("/settings")
     assert page.status_code == 403
 
     api = await client.post(

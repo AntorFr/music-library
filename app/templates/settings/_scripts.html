@@ -1,0 +1,23 @@
+<script>
+function filterTags(category) {
+  const rows = document.querySelectorAll('#tagTableBody tr');
+  rows.forEach(row => {
+    if (!category || row.dataset.category === category) {
+      row.style.display = '';
+    } else {
+      row.style.display = 'none';
+    }
+  });
+}
+
+function filterRFID(mode) {
+  const rows = document.querySelectorAll('#rfidTableBody tr');
+  rows.forEach(row => {
+    if (!mode || row.dataset.assigned === mode) {
+      row.style.display = '';
+    } else {
+      row.style.display = 'none';
+    }
+  });
+}
+</script>

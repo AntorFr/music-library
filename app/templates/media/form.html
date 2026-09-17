@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% set active_nav = "media_new" if not item else "media" %}
+{% set active_nav = "catalog" %}
 
 {% block title %}
   {% if item %}Modifier « {{ item.title }} »{% else %}Ajouter un média{% endif %} — Music Library

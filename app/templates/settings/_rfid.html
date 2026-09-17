@@ -1,10 +1,4 @@
-{% extends "base.html" %}
-{% set active_nav = "rfid" %}
-
-{% block title %}RFID — Music Library{% endblock %}
-{% block topbar_title %}Gestion des tags RFID{% endblock %}
-
-{% block content %}
+{# Onglet RFID — extrait de l'ancienne page /rfid, fusionnée dans /settings. #}
 <div class="d-flex gap-3" style="align-items: flex-start; flex-wrap: wrap;">
   <!-- RFID list -->
   <div class="flex-1" style="min-width: 520px;">
@@ -15,7 +9,7 @@
         <option value="assigned">Associés</option>
       </select>
       <div class="flex-1"></div>
-      <span class="text-muted text-sm">{{ tags|length }} tag{{ 's' if tags|length != 1 else '' }}</span>
+      <span class="text-muted text-sm">{{ rfid_tags|length }} carte{{ 's' if rfid_tags|length != 1 else '' }}</span>
     </div>
 
     <div class="table-container">
@@ -28,7 +22,7 @@
           </tr>
         </thead>
         <tbody id="rfidTableBody">
-          {% for t in tags %}
+          {% for t in rfid_tags %}
           <tr data-assigned="{{ 'assigned' if t.media_id else 'unassigned' }}">
             <td style="font-family: monospace; font-size: .85rem;">{{ t.uid }}</td>
             <td>
@@ -90,19 +84,3 @@
     </div>
   </div>
 </div>
-{% endblock %}
-
-{% block scripts %}
-<script>
-function filterRFID(mode) {
-  const rows = document.querySelectorAll('#rfidTableBody tr');
-  rows.forEach(row => {
-    if (!mode || row.dataset.assigned === mode) {
-      row.style.display = '';
-    } else {
-      row.style.display = 'none';
-    }
-  });
-}
-</script>
-{% endblock %}
