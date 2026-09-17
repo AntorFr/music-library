@@ -62,6 +62,12 @@
 
 {# ----- Launcher app (shown when owner + player chosen) ------------------- #}
 <section id="quickApp" hidden>
+  <div class="alert alert-warning mb-2" id="quickPlayerOffline" hidden>
+    <i class="mdi mdi-speaker-off"></i>
+    Ton enceinte n'est pas jointe pour l'instant — Music Assistant ne la voit pas.
+    Le choix est conservé ; la lecture repartira dès qu'elle revient.
+  </div>
+
   <div class="quick-toolbar">
     <div class="form-group mb-0">
       <label class="form-label" for="quickOwnerSelectTop">Profil</label>
@@ -146,9 +152,47 @@
 
 {% block scripts %}
 <script>
-  const QUICK_OWNER_KEY = 'musicLibrary.quick.owner';
-  const QUICK_PLAYER_KEY = 'musicLibrary.quick.queueId';
+(function () {
+  "use strict";
+  /* Encapsulé : hx-boost ré-exécute ce script à chaque arrivée sur la page, et
+     un `const` de premier niveau redéclaré casserait tout le bloc. Les fonctions
+     appelées depuis les attributs onclick des gabarits sont exportées en bas. */
+
+  /* Le profil et l'enceinte vivent dans des COOKIES, pas dans localStorage :
+     le serveur les lit dès la première requête, donc il rend directement la
+     bonne page (plus de redirection / -> /?owner=…, plus de clignotement de la
+     carte de configuration), et un cookie survit mieux à l'éviction de stockage
+     d'iOS. Les anciennes valeurs localStorage sont reprises une fois. */
+  const OWNER_COOKIE = 'ml_owner';
+  const PLAYER_COOKIE = 'ml_queue';
+  const LEGACY_OWNER_KEY = 'musicLibrary.quick.owner';
+  const LEGACY_PLAYER_KEY = 'musicLibrary.quick.queueId';
+  const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
+
   const quickData = JSON.parse(document.getElementById('quick-data').textContent || '{}');
+
+  function readCookie(name) {
+    const hit = document.cookie.split('; ').find(c => c.startsWith(name + '='));
+    return hit ? decodeURIComponent(hit.slice(name.length + 1)) : null;
+  }
+
+  function writeCookie(name, value) {
+    const base = `${name}=${encodeURIComponent(value || '')}; path=/; SameSite=Lax`;
+    document.cookie = value
+      ? `${base}; max-age=${COOKIE_MAX_AGE}`
+      : `${base}; max-age=0`;
+  }
+
+  function legacyOnce(cookieName, legacyKey) {
+    // Reprise unique des réglages posés par les versions <= 0.22.0.
+    if (readCookie(cookieName)) return;
+    let old = null;
+    try { old = localStorage.getItem(legacyKey); } catch (e) { /* stockage bloqué */ }
+    if (old) {
+      writeCookie(cookieName, old);
+      try { localStorage.removeItem(legacyKey); } catch (e) { /* idem */ }
+    }
+  }
 
   function setSelectValue(id, value) {
     const el = document.getElementById(id);
@@ -156,35 +200,49 @@
   }
 
   function getSelectedQueueId() {
-    const queueId = localStorage.getItem(QUICK_PLAYER_KEY);
-    if (!queueId) return null;
-    if (!(quickData.players || []).includes(queueId)) {
-      localStorage.removeItem(QUICK_PLAYER_KEY);
-      return null;
-    }
-    return queueId;
+    // Volontairement SANS vérification contre la liste courante : une enceinte
+    // absente de l'instantané est indisponible sur le moment (MA injoignable,
+    // enceinte en veille), pas invalide. L'ancienne version effaçait le choix
+    // dans ce cas — un hoquet de MA suffisait à le perdre définitivement.
+    return readCookie(PLAYER_COOKIE) || null;
+  }
+
+  function isPlayerOnline(queueId) {
+    return Boolean(queueId) && (quickData.players || []).includes(queueId);
   }
 
   function syncQuickState() {
-    const owners = quickData.owners || [];
-    const selectedOwner = quickData.selected_owner || '';
-    let savedOwner = localStorage.getItem(QUICK_OWNER_KEY);
-    if (savedOwner && !owners.includes(savedOwner)) {
-      localStorage.removeItem(QUICK_OWNER_KEY);
-      savedOwner = '';
-    }
+    legacyOnce(OWNER_COOKIE, LEGACY_OWNER_KEY);
+    legacyOnce(PLAYER_COOKIE, LEGACY_PLAYER_KEY);
 
-    if (!selectedOwner && savedOwner) {
-      window.location.href = `/?owner=${encodeURIComponent(savedOwner)}`;
-      return;
-    }
-    if (selectedOwner) {
-      localStorage.setItem(QUICK_OWNER_KEY, selectedOwner);
-    }
+    const selectedOwner = quickData.selected_owner || '';
+    // Le serveur a déjà arbitré le profil (paramètre d'URL, puis cookie, puis
+    // portée de l'enfant) : on se contente d'enregistrer son verdict.
+    if (selectedOwner) writeCookie(OWNER_COOKIE, selectedOwner);
 
     const savedPlayer = getSelectedQueueId();
+    setSelectValue('quickOwnerSelect', selectedOwner);
+    setSelectValue('quickOwnerSelectTop', selectedOwner);
     setSelectValue('quickPlayerSelect', savedPlayer);
     setSelectValue('quickPlayerSelectTop', savedPlayer);
+
+    if (savedPlayer && !isPlayerOnline(savedPlayer)) {
+      // Sans option correspondante le <select> retomberait à vide, et le choix
+      // aurait l'air perdu alors qu'il est simplement hors ligne.
+      for (const id of ['quickPlayerSelect', 'quickPlayerSelectTop']) {
+        const sel = document.getElementById(id);
+        if (!sel || sel.querySelector(`option[value="${savedPlayer}"]`)) continue;
+        const opt = document.createElement('option');
+        opt.value = savedPlayer;
+        opt.textContent = 'Enceinte hors ligne';
+        sel.appendChild(opt);
+      }
+      setSelectValue('quickPlayerSelect', savedPlayer);
+      setSelectValue('quickPlayerSelectTop', savedPlayer);
+    }
+
+    const offline = document.getElementById('quickPlayerOffline');
+    if (offline) offline.hidden = !savedPlayer || isPlayerOnline(savedPlayer);
 
     const ready = Boolean(selectedOwner && savedPlayer);
     document.getElementById('quickSetup').hidden = ready;
@@ -194,24 +252,24 @@
   function wireSelects() {
     for (const id of ['quickOwnerSelect', 'quickOwnerSelectTop']) {
       const el = document.getElementById(id);
-      if (!el) continue;
+      if (!el || el.dataset.wired === '1') continue;
+      el.dataset.wired = '1';
       el.addEventListener('change', () => {
-        if (!el.value) {
-          localStorage.removeItem(QUICK_OWNER_KEY);
-          window.location.href = '/';
-          return;
-        }
-        localStorage.setItem(QUICK_OWNER_KEY, el.value);
-        window.location.href = `/?owner=${encodeURIComponent(el.value)}`;
+        // Le cookie est écrit AVANT la navigation : le serveur rendra donc la
+        // bonne page même si l'URL ne porte pas le profil.
+        writeCookie(OWNER_COOKIE, el.value);
+        window.location.href = el.value
+          ? `/?owner=${encodeURIComponent(el.value)}`
+          : '/';
       });
     }
 
     for (const id of ['quickPlayerSelect', 'quickPlayerSelectTop']) {
       const el = document.getElementById(id);
-      if (!el) continue;
+      if (!el || el.dataset.wired === '1') continue;
+      el.dataset.wired = '1';
       el.addEventListener('change', () => {
-        if (el.value) localStorage.setItem(QUICK_PLAYER_KEY, el.value);
-        else localStorage.removeItem(QUICK_PLAYER_KEY);
+        writeCookie(PLAYER_COOKIE, el.value);
         setSelectValue('quickPlayerSelect', el.value);
         setSelectValue('quickPlayerSelectTop', el.value);
         syncQuickState();
@@ -469,10 +527,34 @@
     startNowBar();
   }
 
-  document.addEventListener('DOMContentLoaded', () => {
+  /* hx-boost remplace le corps de la page sans recharger le document, donc
+     DOMContentLoaded ne se produit PAS en arrivant ici par le menu. Sans le
+     second déclencheur ci-dessous, la restauration ne tournait jamais dans ce
+     cas et la page restait sur la carte de configuration, vide — ce qui donnait
+     l'impression que le profil avait été effacé alors qu'il n'était pas relu. */
+  function bootListen() {
+    const root = document.getElementById('quickSetup');
+    if (!root || root.dataset.booted === '1') return;
+    root.dataset.booted = '1';
     wireSelects();
     syncQuickState();
     wireNowBar();
-  });
+  }
+
+  window.playQuickMedia = playQuickMedia;
+  window.openQuickPanel = openQuickPanel;
+  window.closeQuickPanel = closeQuickPanel;
+  window.playEpisode = playEpisode;
+  window.playChapter = playChapter;
+  window.filterEpisodes = filterEpisodes;
+  window.filterChapters = filterChapters;
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootListen);
+  } else {
+    bootListen();
+  }
+  document.addEventListener('htmx:load', bootListen);
+})();
 </script>
 {% endblock %}

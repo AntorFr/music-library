@@ -2,7 +2,9 @@
 
 > MàJ : 2026-09-17
 
-**État :** v0.22.0 — refonte nav et UI (« v2 »). Le menu passe de **8 entrées à
+**État :** v0.22.1 — refonte nav et UI (« v2 »), plus le correctif de
+persistance du lanceur (profil et enceinte tenaient dans `localStorage` et
+étaient perdus à chaque retour par le menu). Le menu passe de **8 entrées à
 4** : Écouter (le lanceur, devenu la racine), Catalogue, Ajouter (= la page
 Music Assistant, avec la saisie manuelle en modale), Réglages (Tags + RFID +
 Système en onglets, parents uniquement). Supprimées : la page de stats qui
@@ -10,11 +12,11 @@ servait d'accueil, et la page Lecteurs qui listait les enceintes sans un seul
 bouton. Les filtres du catalogue passent du mur de `<select>` à des pastilles
 qui sont des liens (chaque état de filtre est une URL). Enfin, la **barre de
 lecture** branche l'API de contrôle MA — qui existait depuis les écrans
-embarqués mais que l'interface web n'appelait jamais. 93 tests verts.
+embarqués mais que l'interface web n'appelait jamais. 103 tests verts.
 
 **Prochaines étapes :**
-- [ ] Déployer v0.22.0 et vérifier la barre de lecture contre le vrai MA
-      (seul morceau non vérifiable hors navigateur : sondage, seek, volume)
+- [ ] Vérifier dans le navigateur : la barre de lecture (sondage, seek, volume)
+      et la persistance profil/enceinte après un aller-retour par le menu
 - [ ] Retravailler le logo / la pochette par défaut — jugés « un peu ugly »
 - [ ] MA : provider « Spotify Laurine » (`spotify--yPK3Sfsf`) en
       `Configuration is invalid` mais toujours activé → premier mapping de

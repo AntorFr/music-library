@@ -39,6 +39,10 @@ from app.services.tag_service import (
 
 logger = logging.getLogger(__name__)
 
+#: Cookie carrying the launcher profile. Written by the page, read here so the
+#: very first response renders the right state (see ``listen_page``).
+OWNER_COOKIE = "ml_owner"
+
 router = APIRouter(tags=["frontend"])
 templates = Jinja2Templates(directory="app/templates")
 
@@ -291,7 +295,13 @@ async def listen_page(
     owner: str | None = None,
     db: AsyncSession = Depends(get_db),
 ):
-    """Home: the launcher. Pick a profile and a speaker, tap a cover, it plays."""
+    """Home: the launcher. Pick a profile and a speaker, tap a cover, it plays.
+
+    The profile comes from the URL, then from the ``ml_owner`` cookie the page
+    writes. Reading it here is what lets the first response already be the right
+    page: no redirect round-trip, and no flash of the setup card on every launch.
+    """
+    owner = owner or request.cookies.get(OWNER_COOKIE) or None
     user = get_current_user(request)
     owner_tags = await list_tags(db, category="owner")
     owners = sorted({t.value for t in owner_tags}, key=str.casefold)
