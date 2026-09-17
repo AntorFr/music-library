@@ -13,10 +13,19 @@
             {{ ma_status.players }} enceinte{{ 's' if ma_status.players != 1 else '' }}
           </span>
         </div>
+        {% elif ma_status.auth_failed %}
+        <div class="alert alert-warning mb-2">
+          <strong>Music Assistant refuse le jeton.</strong>
+          Le serveur répond, mais rejette nos commandes : c'est
+          <code>ML_MUSIC_ASSISTANT_TOKEN</code> qu'il faut corriger, pas le réseau.
+        </div>
         {% else %}
         <div class="alert alert-warning mb-2">
-          Music Assistant ne répond pas. Le lanceur et l'ajout sont indisponibles
-          tant que la connexion n'est pas rétablie.
+          <strong>Music Assistant ne répond pas.</strong>
+          Le lanceur et l'ajout sont indisponibles tant que la connexion n'est pas rétablie.
+          {% if ma_status.error %}
+          <div class="text-sm text-muted mt-1">{{ ma_status.error }}</div>
+          {% endif %}
         </div>
         {% endif %}
 

@@ -244,3 +244,31 @@ def test_listen_template_calls_only_routes_that_exist():
     paths = _api_paths()
     for name in sorted(called):
         assert f"/api/v1/ma/{name}" in paths, f"le gabarit appelle /api/v1/ma/{name}, route absente"
+
+
+# --- Système tab: say which thing is broken --------------------------------
+
+@pytest.mark.asyncio
+async def test_system_tab_names_a_token_problem_as_such(client, monkeypatch):
+    """A wrong token reaches MA and is refused. Reporting that as "unreachable"
+    sends whoever reads the page debugging the network instead of the token."""
+    async def refused(*_a, **_k):
+        raise RuntimeError("MA command 'players/all' failed: Authentication is required.")
+
+    monkeypatch.setattr("app.services.music_assistant.get_ma_client", refused)
+    r = await client.get("/settings?tab=system")
+    assert r.status_code == 200
+    assert "refuse le jeton" in r.text
+    assert "ML_MUSIC_ASSISTANT_TOKEN" in r.text
+    assert "ne répond pas" not in r.text
+
+
+@pytest.mark.asyncio
+async def test_system_tab_reports_a_real_outage_as_an_outage(client, monkeypatch):
+    async def down(*_a, **_k):
+        raise OSError("connection refused")
+
+    monkeypatch.setattr("app.services.music_assistant.get_ma_client", down)
+    r = await client.get("/settings?tab=system")
+    assert "ne répond pas" in r.text
+    assert "refuse le jeton" not in r.text

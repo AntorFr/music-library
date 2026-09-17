@@ -137,7 +137,13 @@ async def _ma_status() -> dict:
     Reports the provider instances MA holds but cannot load: one of those silently
     returns an empty episode list instead of failing (see docs/MUSIC_ASSISTANT_COMPATIBILITY.md).
     """
-    status: dict[str, Any] = {"reachable": False, "players": 0, "broken_providers": []}
+    status: dict[str, Any] = {
+        "reachable": False,
+        "auth_failed": False,
+        "error": None,
+        "players": 0,
+        "broken_providers": [],
+    }
     try:
         from app.services.music_assistant import get_ma_client
         ma = await get_ma_client()
@@ -153,7 +159,11 @@ async def _ma_status() -> dict:
         except Exception as exc:
             logger.info("MA provider configs unavailable: %s", exc)
     except Exception as exc:
-        logger.info("Music Assistant unreachable: %s", exc)
+        # A wrong token reaches MA and is refused — reporting that as "unreachable"
+        # sends whoever reads this page debugging the network instead of the token.
+        status["error"] = str(exc)
+        status["auth_failed"] = "authentication" in str(exc).lower()
+        logger.info("Music Assistant unavailable: %s", exc)
     return status
 
 
