@@ -13,63 +13,99 @@
          hx-target="#media-results"
          hx-trigger="input changed delay:300ms, search"
          hx-push-url="true"
-         hx-include="[name='media_type'],[name='provider'],[name^='tag_']">
+         hx-vals='{{ active_query | tojson }}'>
 </div>
 {% endblock %}
 
 {% block content %}
-<!-- Filters -->
-<div class="filter-bar" style="flex-wrap: wrap;">
-  <select name="media_type"
-          hx-get="/media"
-          hx-target="#media-results"
-          hx-trigger="change"
-          hx-include="[name='search'],[name='provider'],[name^='tag_']"
-          hx-push-url="true">
-    <option value="">Tous les types</option>
-    {% for t in media_types %}
-    <option value="{{ t.value }}" {% if media_type == t.value %}selected{% endif %}>
-      {{ type_labels.get(t.value, t.value) }}
-    </option>
-    {% endfor %}
-  </select>
+{#
+  v2 : le mur de listes déroulantes devient des pastilles.
+  v1 posait un <select> par axe — type, fournisseur, puis un par catégorie de
+  tag — et la barre débordait dès trois catégories, sans jamais montrer ce qui
+  était actif. Ici chaque pastille est un LIEN portant l'URL du catalogue avec
+  ce filtre basculé : rien à synchroniser en JS, et chaque état de filtre est
+  une adresse qu'on peut mettre en favori.
+#}
+{% macro chip(url, label, active=false, removable=false) -%}
+<a href="{{ url }}"
+   hx-get="{{ url }}" hx-target="#media-results" hx-push-url="true"
+   class="chip{% if active %} chip-on{% endif %}{% if removable %} chip-removable{% endif %}">
+  {{- label -}}
+  {%- if removable %}<i class="mdi mdi-close"></i>{% endif -%}
+</a>
+{%- endmacro %}
 
-  <select name="provider"
-          hx-get="/media"
-          hx-target="#media-results"
-          hx-trigger="change"
-          hx-include="[name='search'],[name='media_type'],[name^='tag_']"
-          hx-push-url="true">
-    <option value="">Tous les fournisseurs</option>
-    {% for p in providers %}
-    <option value="{{ p }}" {% if provider == p %}selected{% endif %}>{{ p }}</option>
-    {% endfor %}
-  </select>
-
-  {% for cat_slug, cat_values in tags_by_cat.items() %}
-  <select name="tag_{{ cat_slug }}"
-          hx-get="/media"
-          hx-target="#media-results"
-          hx-trigger="change"
-          hx-include="[name='search'],[name='media_type'],[name='provider'],[name^='tag_']:not([name='tag_{{ cat_slug }}'])"
-          hx-push-url="true">
-    <option value="">{{ cat_labels.get(cat_slug, cat_slug) }}</option>
-    {% for v in cat_values|sort %}
-    <option value="{{ v }}" {% if tag_filters.get(cat_slug) == v %}selected{% endif %}>{{ v }}</option>
-    {% endfor %}
-  </select>
+<div class="chip-bar">
+  {{ chip(filter_url(media_type=''), 'Tous', active=not media_type) }}
+  {% for t in media_types %}
+  {{ chip(filter_url(media_type=t.value),
+          type_labels.get(t.value, t.value),
+          active=(media_type == t.value)) }}
   {% endfor %}
 
-  {% if search or media_type or provider or tag_filters %}
-  <a href="/media" class="btn btn-outline btn-sm">
-    <i class="mdi mdi-close"></i> Réinitialiser
-  </a>
+  {% if providers|length > 1 or tags_by_cat %}<span class="chip-sep"></span>{% endif %}
+
+  {% if providers|length > 1 %}
+  <details class="chip-drop">
+    <summary class="chip{% if provider %} chip-on{% endif %}">
+      {% if provider %}{{ provider }}{% else %}Fournisseur{% endif %}
+      <i class="mdi mdi-chevron-down"></i>
+    </summary>
+    <div class="chip-menu">
+      {% for p in providers %}
+      <a href="{{ filter_url(provider=p) }}"
+         hx-get="{{ filter_url(provider=p) }}" hx-target="#media-results" hx-push-url="true"
+         class="{% if provider == p %}active{% endif %}">{{ p }}</a>
+      {% endfor %}
+    </div>
+  </details>
   {% endif %}
 
-  <div class="flex-1"></div>
+  {% for cat_slug, cat_values in tags_by_cat.items() %}
+  {% set picked = tag_filters.get(cat_slug) %}
+  <details class="chip-drop">
+    <summary class="chip{% if picked %} chip-on{% endif %}">
+      {{ cat_labels.get(cat_slug, cat_slug) }}{% if picked %} : {{ picked | capitalize }}{% endif %}
+      <i class="mdi mdi-chevron-down"></i>
+    </summary>
+    <div class="chip-menu">
+      {% for v in cat_values|sort %}
+      <a href="{{ filter_url(**{'tag_' ~ cat_slug: v}) }}"
+         hx-get="{{ filter_url(**{'tag_' ~ cat_slug: v}) }}"
+         hx-target="#media-results" hx-push-url="true"
+         class="{% if picked == v %}active{% endif %}">{{ v | capitalize }}</a>
+      {% endfor %}
+    </div>
+  </details>
+  {% endfor %}
 
+  <div class="flex-1"></div>
   <span class="text-muted text-sm">{{ total }} média{{ 's' if total != 1 else '' }}</span>
 </div>
+
+{% if has_filters %}
+{# Ce qui est actif se lit d'un coup d'œil, et se retire d'un clic. #}
+<div class="chip-bar chip-bar-active">
+  <span class="text-muted text-sm">Filtres :</span>
+  {% if search %}
+    {{ chip(filter_url(search=''), '« ' ~ search ~ ' »', active=true, removable=true) }}
+  {% endif %}
+  {% if media_type %}
+    {{ chip(filter_url(media_type=''), type_labels.get(media_type, media_type),
+            active=true, removable=true) }}
+  {% endif %}
+  {% if provider %}
+    {{ chip(filter_url(provider=''), provider, active=true, removable=true) }}
+  {% endif %}
+  {% for cat_slug, value in tag_filters.items() %}
+    {{ chip(filter_url(**{'tag_' ~ cat_slug: ''}),
+            cat_labels.get(cat_slug, cat_slug) ~ ' : ' ~ value | capitalize,
+            active=true, removable=true) }}
+  {% endfor %}
+  <a href="/media" hx-get="/media" hx-target="#media-results" hx-push-url="true"
+     class="text-sm" style="margin-left:.25rem">Tout effacer</a>
+</div>
+{% endif %}
 
 <div id="media-results">
   {% include "components/media_grid.html" %}

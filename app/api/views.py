@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import math
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -108,6 +108,27 @@ def _provider_info(provider: str) -> dict:
         "provider_badge": cls,
         "is_library": provider == "library",
     }
+
+
+def _filter_url_builder(active: dict[str, str]):
+    """Return a ``filter_url(**changes)`` the catalogue template calls per chip.
+
+    Chips are links, not form controls: each one carries the URL the catalogue
+    would have with that single filter flipped. No hidden inputs to keep in sync,
+    no JS — and every filter state stays a bookmarkable address.
+    Passing ``""`` (or None) for a key drops it.
+    """
+    def filter_url(**changes: str | None) -> str:
+        params = {k: v for k, v in active.items() if v}
+        for key, value in changes.items():
+            if value:
+                params[key] = value
+            else:
+                params.pop(key, None)
+        params.pop("page", None)  # any filter change lands back on page 1
+        query = urlencode(params)
+        return f"/media?{query}" if query else "/media"
+    return filter_url
 
 
 async def _ma_status() -> dict:
@@ -362,6 +383,16 @@ async def media_list(
         tags_by_cat.pop("owner", None)
     cat_labels = {c.slug: c.label for c in categories}
 
+    active_params: dict[str, str] = {}
+    if search:
+        active_params["search"] = search
+    if media_type:
+        active_params["media_type"] = media_type
+    if provider:
+        active_params["provider"] = provider
+    for cat, value in tag_filters.items():
+        active_params[f"tag_{cat}"] = value
+
     ctx = _base_ctx(
         request,
         items=items,
@@ -376,6 +407,11 @@ async def media_list(
         tag_filters=tag_filters,
         tags_by_cat=tags_by_cat,
         cat_labels=cat_labels,
+        filter_url=_filter_url_builder(active_params),
+        has_filters=bool(active_params),
+        # The search box keeps the other filters: it sends them as hx-vals rather
+        # than hx-include, now that the chips are links instead of form controls.
+        active_query={k: v for k, v in active_params.items() if k != "search"},
     )
 
     # If HTMX request and target is #media-results, return partial

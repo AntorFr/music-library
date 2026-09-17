@@ -150,3 +150,43 @@ async def test_add_page_carries_the_manual_modal(client):
     assert r.status_code == 200
     assert 'id="manualScrim"' in r.text
     assert "Saisie manuelle" in r.text
+
+
+# --- Catalogue filters are links, not form controls ------------------------
+
+@pytest.mark.asyncio
+async def test_filter_chips_compose_and_uncompose(client):
+    """Each chip carries the URL with that one filter flipped — combining is the
+    whole point, and removing one must keep the others."""
+    r = await client.get("/media?media_type=podcast")
+    assert r.status_code == 200
+    # Picking a tag on top of the type keeps the type.
+    assert "/media?media_type=podcast&amp;tag_age_group=kids" in r.text
+
+    r2 = await client.get("/media?media_type=podcast&tag_age_group=kids")
+    active = r2.text.split('chip-bar-active')[1].split("</div>")[0]
+    # Dropping the type keeps the tag, and vice versa.
+    assert 'href="/media?tag_age_group=kids"' in active
+    assert 'href="/media?media_type=podcast"' in active
+    assert 'href="/media"' in active  # tout effacer
+
+
+@pytest.mark.asyncio
+async def test_search_keeps_the_other_filters(client):
+    r = await client.get("/media?media_type=podcast&tag_age_group=kids")
+    assert '"media_type": "podcast"' in r.text
+    assert '"tag_age_group": "kids"' in r.text
+
+
+@pytest.mark.asyncio
+async def test_catalogue_has_no_select_wall_left(client):
+    """v1 stacked one <select> per filter axis. None should remain."""
+    r = await client.get("/media")
+    filters = r.text.split('<div class="chip-bar">')[1].split('<div id="media-results">')[0]
+    assert "<select" not in filters
+
+
+@pytest.mark.asyncio
+async def test_changing_a_filter_returns_to_page_one(client):
+    r = await client.get("/media?page=3&media_type=podcast")
+    assert "page=3" not in r.text.split('<div class="chip-bar">')[1].split("</div>")[0]

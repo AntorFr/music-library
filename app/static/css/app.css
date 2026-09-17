@@ -1184,6 +1184,102 @@ tbody tr:last-child td {
   margin-top: 16px;
 }
 
+/* --- Pastilles de filtre --------------------------------------------------
+   Chaque pastille est un lien portant l'URL du catalogue avec ce filtre
+   basculé. Les menus déroulants sont des <details> : pas une ligne de JS. -- */
+.chip-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 14px;
+}
+
+.chip-bar-active {
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  margin-top: -4px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--fg-muted);
+  font-size: .85rem;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.chip:hover {
+  color: var(--fg);
+  border-color: var(--primary);
+  text-decoration: none;
+}
+
+.chip-on {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+  font-weight: 600;
+}
+
+.chip-on:hover { color: #fff; filter: brightness(1.08); }
+
+.chip-removable i { font-size: .9rem; opacity: .75; }
+.chip-removable:hover i { opacity: 1; }
+
+.chip-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  margin-inline: 3px;
+}
+
+/* Menu déroulant natif : <details> + <summary class="chip">. */
+.chip-drop { position: relative; }
+.chip-drop > summary { list-style: none; }
+.chip-drop > summary::-webkit-details-marker { display: none; }
+.chip-drop > summary::marker { content: ""; }
+.chip-drop[open] > summary { border-color: var(--primary); }
+
+.chip-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 1100;
+  min-width: 180px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 32px -10px var(--shadow-lg);
+}
+
+.chip-menu a {
+  padding: 7px 11px;
+  border-radius: var(--radius-sm);
+  color: var(--fg-muted);
+  font-size: .87rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.chip-menu a:hover { background: var(--hover-bg); color: var(--fg); text-decoration: none; }
+.chip-menu a.active { color: var(--primary); font-weight: 600; }
+
 /* --- Modale ---------------------------------------------------------------
    Une seule modale dans l'app (la saisie manuelle). Volontairement sobre :
    elle sert un geste rare, elle n'a pas à être un composant générique. ----- */
