@@ -1,0 +1,47 @@
+{#
+  Barre de lecture — seulement sur Écouter (arbitrage du 2026-09-17).
+
+  L'app exposait déjà tout le contrôle de lecture (play/pause, piste, seek,
+  volume, morceau en cours) via /api/v1/ma/* : c'était écrit pour les écrans
+  embarqués, et l'interface web ne l'appelait jamais — le lanceur envoyait une
+  lecture et oubliait. C'est cette barre qui rend la page « Lecteurs »
+  supprimable au lieu d'être simplement supprimée.
+
+  Rendue vide et masquée : le JS la remplit au premier sondage.
+#}
+<div class="nowbar" id="nowBar" hidden>
+  <img class="nowbar-art" id="nowArt" src="/static/img/default_cover.svg" alt="">
+
+  <div class="nowbar-meta">
+    <b id="nowTitle">—</b>
+    <span id="nowArtist"></span>
+  </div>
+
+  <div class="nowbar-progress">
+    <span class="nowbar-time" id="nowElapsed">0:00</span>
+    <input type="range" id="nowSeek" class="nowbar-track"
+           min="0" max="100" value="0" step="1"
+           aria-label="Position dans la lecture">
+    <span class="nowbar-time" id="nowDuration">0:00</span>
+  </div>
+
+  <div class="nowbar-controls">
+    <button type="button" class="btn btn-icon" id="nowPrev" aria-label="Précédent">
+      <i class="mdi mdi-skip-previous"></i>
+    </button>
+    <button type="button" class="btn btn-icon nowbar-play" id="nowPlayPause" aria-label="Lecture / pause">
+      <i class="mdi mdi-play" id="nowPlayIcon"></i>
+    </button>
+    <button type="button" class="btn btn-icon" id="nowNext" aria-label="Suivant">
+      <i class="mdi mdi-skip-next"></i>
+    </button>
+  </div>
+
+  <div class="nowbar-volume">
+    <i class="mdi mdi-volume-high"></i>
+    <input type="range" id="nowVolume" min="0" max="100" value="50" step="1"
+           aria-label="Volume">
+  </div>
+
+  <span class="nowbar-speaker" id="nowSpeaker"></span>
+</div>

@@ -140,6 +140,10 @@
 </section>
 {% endblock %}
 
+{% block below_content %}
+{% include "components/now_playing.html" %}
+{% endblock %}
+
 {% block scripts %}
 <script>
   const QUICK_OWNER_KEY = 'musicLibrary.quick.owner';
@@ -211,6 +215,7 @@
         setSelectValue('quickPlayerSelect', el.value);
         setSelectValue('quickPlayerSelectTop', el.value);
         syncQuickState();
+        refreshNowBar();
       });
     }
   }
@@ -227,6 +232,8 @@
       const resp = await fetch(`/api/v1/ma/play?${params.toString()}`, {method: 'POST'});
       if (resp.ok) {
         showToast(`Lecture lancée : ${title}`, 'success');
+        // MA met un instant à basculer : on relit un peu après, pas dans la foulée.
+        setTimeout(refreshNowBar, 600);
       } else {
         const err = await resp.json().catch(() => ({}));
         showToast('Erreur : ' + (err.detail || 'lecture impossible'), 'error');
@@ -307,9 +314,165 @@
     if (count) count.textContent = term ? `(${visible}/${rows.length})` : `(${rows.length})`;
   }
 
+  /* ---------------------------------------------------------------------
+     Barre de lecture.
+
+     L'API de contrôle (/api/v1/ma/*) existait déjà pour les écrans embarqués ;
+     la voici enfin appelée depuis le navigateur. Sondage toutes les 5 s, mis en
+     pause quand l'onglet est caché — inutile de réveiller Music Assistant pour
+     une page que personne ne regarde.
+     --------------------------------------------------------------------- */
+  const NOW_POLL_MS = 5000;
+  let nowTimer = null;
+  let nowTicker = null;
+  let nowState = null;
+  let nowDragging = false;
+
+  function fmtTime(seconds) {
+    if (seconds == null || isNaN(seconds)) return '0:00';
+    const s = Math.max(0, Math.floor(seconds));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = String(s % 60).padStart(2, '0');
+    return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
+  }
+
+  function renderNowBar(data) {
+    const bar = document.getElementById('nowBar');
+    if (!bar) return;
+
+    // Rien à montrer : pas de file, ou une file à l'arrêt et sans titre.
+    if (!data || !data.available || (!data.title && data.state === 'idle')) {
+      bar.hidden = true;
+      return;
+    }
+    bar.hidden = false;
+
+    document.getElementById('nowTitle').textContent = data.title || 'Lecture';
+    document.getElementById('nowArtist').textContent = data.artist || '';
+
+    const art = document.getElementById('nowArt');
+    const cover = data.cover_url || '/static/img/default_cover.svg';
+    if (art.getAttribute('src') !== cover) art.setAttribute('src', cover);
+
+    const playing = data.state === 'playing';
+    const icon = document.getElementById('nowPlayIcon');
+    icon.className = playing ? 'mdi mdi-pause' : 'mdi mdi-play';
+    document.getElementById('nowPlayPause')
+      .setAttribute('aria-label', playing ? 'Pause' : 'Lecture');
+
+    const seek = document.getElementById('nowSeek');
+    const duration = data.duration_s || 0;
+    seek.max = duration || 100;
+    seek.disabled = !duration;
+    if (!nowDragging) seek.value = data.position_s || 0;
+    document.getElementById('nowElapsed').textContent = fmtTime(data.position_s);
+    document.getElementById('nowDuration').textContent = fmtTime(duration);
+
+    const vol = document.getElementById('nowVolume');
+    if (!nowDragging && data.volume != null) vol.value = data.volume;
+
+    const sel = document.getElementById('quickPlayerSelectTop');
+    const label = sel && sel.selectedOptions.length ? sel.selectedOptions[0].textContent : '';
+    document.getElementById('nowSpeaker').textContent = label.trim();
+  }
+
+  async function refreshNowBar() {
+    const queueId = getSelectedQueueId();
+    if (!queueId) {
+      const bar = document.getElementById('nowBar');
+      if (bar) bar.hidden = true;
+      return;
+    }
+    try {
+      const resp = await fetch(`/api/v1/ma/now_playing?queue_id=${encodeURIComponent(queueId)}`);
+      if (!resp.ok) throw new Error(resp.status);
+      nowState = await resp.json();
+      renderNowBar(nowState);
+    } catch (e) {
+      // MA indisponible : on masque plutôt que d'afficher un état faux.
+      const bar = document.getElementById('nowBar');
+      if (bar) bar.hidden = true;
+    }
+  }
+
+  async function nowCommand(path, params) {
+    const queueId = getSelectedQueueId();
+    if (!queueId) return;
+    const qs = new URLSearchParams({queue_id: queueId, ...(params || {})});
+    try {
+      const resp = await fetch(`/api/v1/ma/${path}?${qs}`, {method: 'POST'});
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        showToast(err.detail || 'Commande refusée par Music Assistant', 'error');
+      }
+    } catch (e) {
+      showToast('Music Assistant injoignable', 'error');
+    }
+    // On relit l'état plutôt que de le deviner : MA est la source de vérité.
+    setTimeout(refreshNowBar, 350);
+  }
+
+  function startNowBar() {
+    stopNowBar();
+    refreshNowBar();
+    nowTimer = setInterval(refreshNowBar, NOW_POLL_MS);
+    // Entre deux sondages, on fait avancer le curseur localement pour que la
+    // barre ne donne pas l'impression d'être figée.
+    nowTicker = setInterval(() => {
+      if (!nowState || nowState.state !== 'playing' || nowDragging) return;
+      nowState.position_s = (nowState.position_s || 0) + 1;
+      if (nowState.duration_s && nowState.position_s > nowState.duration_s) return;
+      document.getElementById('nowSeek').value = nowState.position_s;
+      document.getElementById('nowElapsed').textContent = fmtTime(nowState.position_s);
+    }, 1000);
+  }
+
+  function stopNowBar() {
+    if (nowTimer) clearInterval(nowTimer);
+    if (nowTicker) clearInterval(nowTicker);
+    nowTimer = nowTicker = null;
+  }
+
+  function wireNowBar() {
+    const bar = document.getElementById('nowBar');
+    if (!bar) return;
+
+    document.getElementById('nowPlayPause')
+      .addEventListener('click', () => nowCommand('play_pause'));
+    document.getElementById('nowNext')
+      .addEventListener('click', () => nowCommand('next'));
+    document.getElementById('nowPrev')
+      .addEventListener('click', () => nowCommand('previous'));
+
+    const seek = document.getElementById('nowSeek');
+    const vol = document.getElementById('nowVolume');
+    for (const el of [seek, vol]) {
+      el.addEventListener('pointerdown', () => { nowDragging = true; });
+      el.addEventListener('pointerup', () => { nowDragging = false; });
+      el.addEventListener('keydown', () => { nowDragging = true; });
+    }
+    seek.addEventListener('change', () => {
+      nowDragging = false;
+      nowCommand('seek', {position: String(Math.round(seek.value))});
+    });
+    vol.addEventListener('change', () => {
+      nowDragging = false;
+      nowCommand('volume', {level: String(Math.round(vol.value))});
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) stopNowBar();
+      else startNowBar();
+    });
+
+    startNowBar();
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     wireSelects();
     syncQuickState();
+    wireNowBar();
   });
 </script>
 {% endblock %}

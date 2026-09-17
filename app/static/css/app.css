@@ -1184,6 +1184,142 @@ tbody tr:last-child td {
   margin-top: 16px;
 }
 
+/* --- Barre de lecture -----------------------------------------------------
+   Sur Écouter uniquement : ailleurs elle sort du flux, elle ne se réduit pas.
+   Collée en bas de la zone principale, au-dessus de la barre d'onglets. ---- */
+.nowbar {
+  position: sticky;
+  bottom: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+  margin: 16px -24px -24px;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+}
+
+.nowbar[hidden] { display: none; }
+
+.nowbar-art {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: var(--surface);
+}
+
+.nowbar-meta { flex: 1 1 140px; min-width: 0; }
+
+.nowbar-meta b {
+  display: block;
+  font-size: .87rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nowbar-meta span {
+  display: block;
+  font-size: .75rem;
+  color: var(--fg-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nowbar-progress {
+  flex: 1 1 200px;
+  max-width: 320px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.nowbar-time {
+  font-variant-numeric: tabular-nums;
+  font-size: .72rem;
+  color: var(--fg-muted);
+  min-width: 36px;
+  text-align: center;
+}
+
+.nowbar-controls { display: flex; align-items: center; gap: 2px; }
+
+.nowbar-play {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+.nowbar-play:hover { filter: brightness(1.08); background: var(--primary); color: #fff; }
+.nowbar-play i { font-size: 1.3rem; }
+
+.nowbar-volume {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--fg-muted);
+  flex: 0 1 130px;
+}
+
+.nowbar-speaker {
+  font-size: .75rem;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+/* Curseurs : même trait dans les deux thèmes, pouce discret. */
+.nowbar input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.nowbar input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--primary);
+  border: 0;
+}
+
+.nowbar input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--primary);
+  border: 0;
+}
+
+.nowbar input[type="range"]:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+
+@media (max-width: 768px) {
+  .nowbar {
+    margin: 16px -16px 0;
+    /* La barre d'onglets est fixe : on se pose juste au-dessus. */
+    bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .nowbar-progress,
+  .nowbar-volume,
+  .nowbar-speaker {
+    display: none;
+  }
+}
+
 /* --- Pastilles de filtre --------------------------------------------------
    Chaque pastille est un lien portant l'URL du catalogue avec ce filtre
    basculé. Les menus déroulants sont des <details> : pas une ligne de JS. -- */

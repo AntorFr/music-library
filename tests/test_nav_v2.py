@@ -190,3 +190,57 @@ async def test_catalogue_has_no_select_wall_left(client):
 async def test_changing_a_filter_returns_to_page_one(client):
     r = await client.get("/media?page=3&media_type=podcast")
     assert "page=3" not in r.text.split('<div class="chip-bar">')[1].split("</div>")[0]
+
+
+# --- The now-playing bar ---------------------------------------------------
+
+def _api_paths() -> set[str]:
+    """Every path the app serves.
+
+    FastAPI 0.138 keeps included routers as wrapper routes instead of flattening
+    them into ``app.routes``, so walk into ``original_router``.
+    """
+    paths: set[str] = set()
+
+    def walk(routes):
+        for route in routes:
+            inner = getattr(route, "original_router", None)
+            if inner is not None:
+                walk(inner.routes)  # inner paths already carry the router prefix
+                continue
+            path = getattr(route, "path", None)
+            if path:
+                paths.add(path)
+
+    walk(app.routes)
+    return paths
+
+
+@pytest.mark.asyncio
+async def test_now_playing_bar_lives_on_listen_only(client):
+    """Arbitrage: the bar is on Écouter, and nowhere else — not even reduced."""
+    assert 'id="nowBar"' in (await client.get("/")).text
+    for path in ("/media", "/browse", "/settings"):
+        assert 'id="nowBar"' not in (await client.get(path)).text
+
+
+@pytest.mark.parametrize(
+    "endpoint", ["now_playing", "play_pause", "next", "previous", "seek", "volume"]
+)
+def test_bar_calls_endpoints_that_exist(endpoint):
+    """The bar drives /api/v1/ma/*. Renaming one of these breaks it silently, so
+    the set the browser calls is pinned here."""
+    assert f"/api/v1/ma/{endpoint}" in _api_paths()
+
+
+def test_listen_template_calls_only_routes_that_exist():
+    """Catch a call added to the template that points at a route that never existed."""
+    import pathlib
+    import re
+
+    template = pathlib.Path("app/templates/listen/index.html").read_text()
+    called = set(re.findall(r"/api/v1/ma/([a-z_]+)", template))
+    assert called, "le gabarit n'appelle plus aucune commande MA"
+    paths = _api_paths()
+    for name in sorted(called):
+        assert f"/api/v1/ma/{name}" in paths, f"le gabarit appelle /api/v1/ma/{name}, route absente"

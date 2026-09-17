@@ -87,6 +87,14 @@ plus que leur propre sérialisation :
 L'import MA → catalogue local vit lui dans `app/services/ma_import.py`, partagé par
 `/api/v1/ma/import` et `/browse/import`.
 
+### Le contrôle de lecture est appelé depuis le navigateur (v0.22.0)
+
+`/api/v1/ma/*` (play_pause, next, previous, seek, volume, now_playing) avait été
+écrit pour les écrans embarqués et n'était appelé que par eux. La **barre de
+lecture** de la page Écouter s'en sert désormais : sondage toutes les 5 s, mis en
+pause quand l'onglet est caché. Les noms de ces routes sont épinglés par
+`tests/test_nav_v2.py` — les renommer casserait la barre en silence.
+
 ## Procédure pour une prochaine version
 
 1. Identifier la vraie dernière version.
