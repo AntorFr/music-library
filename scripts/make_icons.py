@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the app icon — the SVG and the PNGs iOS and Android need.
+"""Generate the app's flat artwork: the icon, and the placeholder cover.
 
 The mark follows the Home Assistant family charter, which Music Assistant and
 ESPHome follow too: one shared house silhouette in #18BCF2, and a flat #F2F4F9
@@ -19,6 +19,13 @@ manifest icons, so "Add to Home Screen" falls back to a screenshot of the page.
 The PNGs get a white ground because iOS composites a transparent icon over
 black, which would swallow the house. The SVG stays transparent like the rest of
 the family, so it sits on whatever a browser tab or the sidebar provides.
+
+The placeholder cover reuses the icon's glyph — when there is no artwork for an
+item, showing the library's own mark is truer than a generic disc. It is drawn
+low-contrast on purpose: a placeholder sits in a grid beside real covers and has
+to recede, not compete. Both a SVG (for the web) and a JPEG (for the API and the
+embedded screens) come out of this one drawing; before, the web had a designed
+tile and everything else got a flat grey square generated in the Dockerfile.
 
 Usage:  python scripts/make_icons.py
 """
@@ -54,6 +61,12 @@ BAR_H = 46
 
 #: (filename, pixel size) — 180 is the iOS home-screen size, 192/512 the manifest ones.
 TARGETS = [("apple-touch-icon.png", 180), ("icon-192.png", 192), ("icon-512.png", 512)]
+
+#: Placeholder cover. Square: the tiles round their own corners in CSS, and a
+#: rounded SVG beside a square JPEG would not match.
+COVER_BOX = 300
+COVER_GROUND = "#1B2330"   # dark slate, biased blue so it sits with the icon
+COVER_GLYPH = "#33425A"    # deliberately low contrast — it must recede
 
 
 def _rounded_corner(prev_pt, corner, next_pt, radius, steps=48):
@@ -160,6 +173,44 @@ def build(opaque: bool) -> Image.Image:
     return img
 
 
+def cover_svg() -> str:
+    """The placeholder as SVG, for the web UI's onerror fallbacks."""
+    scale = COVER_BOX / BOX * 0.70          # the glyph alone, inset in the tile
+    dx = (COVER_BOX - BOX * scale) / 2
+    dy = (COVER_BOX - (BARS[-1][0] + BAR_H - BARS[0][0]) * scale) / 2 - BARS[0][0] * scale
+    bars = "\n    ".join(
+        f'<rect x="{dx + (256 - w / 2) * scale:.1f}" y="{dy + y * scale:.1f}" '
+        f'width="{w * scale:.1f}" height="{BAR_H * scale:.1f}" '
+        f'rx="{BAR_H / 2 * scale:.1f}"/>'
+        for y, w in BARS
+    )
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {COVER_BOX} {COVER_BOX}"
+     role="img" aria-label="Pochette manquante">
+  <rect width="{COVER_BOX}" height="{COVER_BOX}" fill="{COVER_GROUND}"/>
+  <g fill="{COVER_GLYPH}">
+    {bars}
+  </g>
+</svg>
+"""
+
+
+def cover_jpeg() -> Image.Image:
+    """The same placeholder as JPEG, for the API and the embedded screens."""
+    ss = 1200
+    scale = ss / BOX * 0.70
+    dx = (ss - BOX * scale) / 2
+    dy = (ss - (BARS[-1][0] + BAR_H - BARS[0][0]) * scale) / 2 - BARS[0][0] * scale
+    img = Image.new("RGB", (ss, ss), COVER_GROUND)
+    draw = ImageDraw.Draw(img)
+    for y, w in BARS:
+        x0 = dx + (256 - w / 2) * scale
+        draw.rounded_rectangle(
+            [x0, dy + y * scale, x0 + w * scale, dy + (y + BAR_H) * scale],
+            radius=BAR_H / 2 * scale, fill=COVER_GLYPH,
+        )
+    return img.resize((COVER_BOX, COVER_BOX), Image.LANCZOS)
+
+
 def main() -> None:
     svg_path = OUT_DIR / "favicon.svg"
     svg_path.write_text(svg(), encoding="utf-8")
@@ -171,6 +222,15 @@ def main() -> None:
         path = OUT_DIR / name
         out.save(path, "PNG", optimize=True)
         print(f"{path.relative_to(OUT_DIR.parents[2])}  {size}x{size}  {path.stat().st_size} B")
+
+    cover_path = OUT_DIR / "default_cover.svg"
+    cover_path.write_text(cover_svg(), encoding="utf-8")
+    print(f"{cover_path.relative_to(OUT_DIR.parents[2])}  {cover_path.stat().st_size} B")
+
+    jpg_path = OUT_DIR / "default_cover.jpg"
+    cover_jpeg().save(jpg_path, "JPEG", quality=88, optimize=True)
+    print(f"{jpg_path.relative_to(OUT_DIR.parents[2])}  "
+          f"{COVER_BOX}x{COVER_BOX}  {jpg_path.stat().st_size} B")
 
 
 if __name__ == "__main__":

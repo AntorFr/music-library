@@ -305,3 +305,14 @@ async def test_manifest_points_at_the_files_that_exist(client):
     for entry in r.json()["icons"]:
         src = entry["src"].lstrip("/")
         assert pathlib.Path("app", src).exists(), f"{entry['src']} est absent du disque"
+
+
+def test_placeholder_cover_ships_in_both_formats():
+    """The web falls back to the SVG, the API and the embedded screens to the JPEG.
+    The JPEG used to be a flat grey square generated in the Dockerfile, so the two
+    drifted apart; both come out of scripts/make_icons.py now and are committed."""
+    import pathlib
+
+    for name in ("default_cover.svg", "default_cover.jpg"):
+        assert pathlib.Path("app/static/img", name).exists()
+    assert "default_cover.jpg" not in pathlib.Path("Dockerfile").read_text()

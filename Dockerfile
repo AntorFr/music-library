@@ -34,9 +34,6 @@ COPY app/ app/
 # Create data directories (thumbnails live in an ephemeral, non-volume path — see config)
 RUN mkdir -p data/covers app/static/img
 
-# Default cover placeholder
-RUN python -c "from PIL import Image; img = Image.new('RGB', (300,300), '#374151'); img.save('app/static/img/default_cover.jpg', quality=85)"
-
 # 8000 = full API + web frontend (HTTPS via reverse proxy)
 # 8001 = dedicated, trimmed ESP API (expose on a fast internal/plaintext network)
 EXPOSE 8000 8001
