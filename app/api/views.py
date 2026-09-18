@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import math
 from typing import Any
-from urllib.parse import quote, urlencode
+from urllib.parse import quote, unquote, urlencode
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -301,7 +301,10 @@ async def listen_page(
     writes. Reading it here is what lets the first response already be the right
     page: no redirect round-trip, and no flash of the setup card on every launch.
     """
-    owner = owner or request.cookies.get(OWNER_COOKIE) or None
+    # The page writes the cookie with encodeURIComponent, and Starlette hands it
+    # back still percent-encoded: without unquote, "S%C3%A9bastien" never matches
+    # "Sébastien", and every accented profile reads as "n'existe plus".
+    owner = owner or unquote(request.cookies.get(OWNER_COOKIE) or "") or None
     user = get_current_user(request)
     owner_tags = await list_tags(db, category="owner")
     owners = sorted({t.value for t in owner_tags}, key=str.casefold)

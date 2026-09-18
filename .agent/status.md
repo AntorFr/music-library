@@ -2,7 +2,9 @@
 
 > MàJ : 2026-09-18
 
-**État :** v0.23.1 — nouvelle icône, alignée sur la charte Home Assistant :
+**État :** v0.23.1 — corrige un bug introduit par la v0.22.1 : un profil
+accentué (« Sébastien ») revenait en « n'existe plus » à chaque retour sur
+Écouter, le cookie étant relu encodé (`S%C3%A9bastien`). Et nouvelle icône, alignée sur la charte Home Assistant :
 même silhouette de maison que HA / Music Assistant / ESPHome (#18BCF2, glyphe
 #F2F4F9, aucun dégradé), avec trois barres centrées pour glyphe. La géométrie
 est relevée sur les pixels de l'icône officielle — écart mesuré nul. La pochette de remplacement reprend le même glyphe, en sourdine, et sort du même script en SVG et en JPEG. Avant :
@@ -15,7 +17,7 @@ servait d'accueil, et la page Lecteurs qui listait les enceintes sans un seul
 bouton. Les filtres du catalogue passent du mur de `<select>` à des pastilles
 qui sont des liens (chaque état de filtre est une URL). Enfin, la **barre de
 lecture** branche l'API de contrôle MA — qui existait depuis les écrans
-embarqués mais que l'interface web n'appelait jamais. 107 tests verts.
+embarqués mais que l'interface web n'appelait jamais. 108 tests verts.
 
 **Prochaines étapes :**
 - [ ] Vérifier dans le navigateur : la barre de lecture (sondage, seek, volume)

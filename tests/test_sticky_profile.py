@@ -144,3 +144,25 @@ def test_an_offline_speaker_is_reported_not_dropped():
 def test_settings_persist_for_a_year():
     assert "60 * 60 * 24 * 365" in LISTEN_TEMPLATE
     assert "SameSite=Lax" in LISTEN_TEMPLATE
+
+
+# --- Accented profiles ----------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_accented_profile_survives_the_cookie_round_trip(client, db):
+    """Regression: the page writes the cookie with encodeURIComponent, Starlette
+    hands it back still percent-encoded, and "M%C3%A9m%C3%A9" never matched
+    "Mémé" — so an accented profile came back as "n'existe plus" on every
+    return to the launcher. The earlier test used "papa", for which encoding is a
+    no-op; it passed without proving anything."""
+    from urllib.parse import quote
+
+    await _media(db, title="Comptines de Mémé", owner="Mémé", uri="spotify://playlist/meme")
+
+    # Exactly what the browser sends: encodeURIComponent("Mémé").
+    client.cookies.set("ml_owner", quote("Mémé", safe=""))
+    r = await client.get("/")
+
+    assert r.status_code == 200
+    assert "n'existe plus" not in r.text
+    assert "Comptines de Mémé" in r.text
