@@ -272,3 +272,36 @@ async def test_system_tab_reports_a_real_outage_as_an_outage(client, monkeypatch
     r = await client.get("/settings?tab=system")
     assert "ne répond pas" in r.text
     assert "refuse le jeton" not in r.text
+
+
+# --- The app icon follows the Home Assistant family charter ----------------
+
+def test_icon_uses_the_family_colours():
+    """#18BCF2 for the house and #F2F4F9 for the glyph are what Home Assistant,
+    Music Assistant and ESPHome all use — sampled from their official icons."""
+    import pathlib
+
+    svg = pathlib.Path("app/static/img/favicon.svg").read_text()
+    assert "#18BCF2" in svg
+    assert "#F2F4F9" in svg
+    # The gradient the old mark used is gone; the charter is flat.
+    assert "linearGradient" not in svg
+
+
+def test_one_icon_file_not_two():
+    """logo.svg and favicon.svg were byte-for-byte the same drawing."""
+    import pathlib
+
+    assert not pathlib.Path("app/static/img/logo.svg").exists()
+    for template in ("app/templates/base.html",):
+        assert "logo.svg" not in pathlib.Path(template).read_text()
+
+
+@pytest.mark.asyncio
+async def test_manifest_points_at_the_files_that_exist(client):
+    import pathlib
+
+    r = await client.get("/manifest.webmanifest")
+    for entry in r.json()["icons"]:
+        src = entry["src"].lstrip("/")
+        assert pathlib.Path("app", src).exists(), f"{entry['src']} est absent du disque"

@@ -278,7 +278,7 @@ async def web_manifest():
                     "purpose": "any maskable",
                 },
                 {
-                    "src": "/static/img/logo.svg",
+                    "src": "/static/img/favicon.svg",
                     "sizes": "any",
                     "type": "image/svg+xml",
                     "purpose": "any",

@@ -1,125 +1,173 @@
 #!/usr/bin/env python3
-"""Rasterise the app icon (app/static/img/favicon.svg) into the PNGs iOS/Android need.
+"""Generate the app icon — the SVG and the PNGs iOS and Android need.
 
-Why PNGs at all: iOS Safari ignores SVG for ``apple-touch-icon`` (and for the manifest
-icons), so "Add to Home Screen" falls back to a screenshot of the page unless a PNG is
-offered. Same story for the Android/Chrome install prompt.
+The mark follows the Home Assistant family charter, which Music Assistant and
+ESPHome follow too: one shared house silhouette in #18BCF2, and a flat #F2F4F9
+glyph inside it that belongs to the project. Ours is three centred bars — a
+catalogue. Music Assistant already owns the vertical axis, so we take the other.
 
-The corners are deliberately left **square** even though the SVG is a rounded square:
-both platforms apply their own mask (squircle on iOS, adaptive shape on Android). A
-pre-rounded icon would be rounded twice and show dark gaps in the corners.
+The house geometry was measured off the official brand icon
+(brands.home-assistant.io/homeassistant/icon@2x.png), not copied from the Home
+Assistant *sticker*, whose house is squatter — a roof 10px lower at the apex and
+26px lower at the shoulders, on a 512 canvas. In the icon the apex touches the
+top of the square and the shoulders sit at exactly half height, with a 45° roof.
+Checked against that PNG row by row: the largest deviation is 1px in 512.
 
-The shapes are redrawn here rather than rasterised from the SVG so the script needs no
-SVG toolchain — Pillow is already a project dependency. Keep the two in sync by eye; the
-coordinates below are the SVG's own 256x256 viewBox units.
+Why PNGs at all: iOS Safari ignores SVG for apple-touch-icon and for the
+manifest icons, so "Add to Home Screen" falls back to a screenshot of the page.
+
+The PNGs get a white ground because iOS composites a transparent icon over
+black, which would swallow the house. The SVG stays transparent like the rest of
+the family, so it sits on whatever a browser tab or the sidebar provides.
 
 Usage:  python scripts/make_icons.py
 """
 
 from __future__ import annotations
 
+import math
 import pathlib
 
 from PIL import Image, ImageDraw
 
 OUT_DIR = pathlib.Path(__file__).resolve().parent.parent / "app" / "static" / "img"
 
+#: The whole drawing is expressed on this square, the one the measurements used.
+BOX = 512
 #: Rendered at this resolution then downscaled — cheap anti-aliasing.
 SUPERSAMPLE = 2048
-#: SVG viewBox side, the unit all coordinates below are expressed in.
-VIEWBOX = 256
 
-GRADIENT_FROM = (3, 155, 229)    # #039be5
-GRADIENT_TO = (2, 136, 209)      # #0288d1
+HOUSE = "#18BCF2"      # sampled from the official icons; identical on all three
+GLYPH = "#F2F4F9"      # idem
+GROUND = "#FFFFFF"     # PNG only — see the module docstring
+
+#: Corners of the house before rounding, clockwise from the bottom-left, with
+#: the radius applied at each. The apex lands on the top edge and the shoulders
+#: at half height, which is what makes the silhouette the family's rather than
+#: merely house-shaped.
+HOUSE_CORNERS = [((0, 512), 32), ((0, 256), 80), ((256, 0), 30),
+                 ((512, 256), 80), ((512, 512), 32)]
+
+#: The glyph: three bars, centred, in the band Music Assistant uses for its own.
+BARS = [(258, 340), (328, 244), (398, 296)]   # (y, width), height 46, fully rounded
+BAR_H = 46
 
 #: (filename, pixel size) — 180 is the iOS home-screen size, 192/512 the manifest ones.
-TARGETS = [
-    ("apple-touch-icon.png", 180),
-    ("icon-192.png", 192),
-    ("icon-512.png", 512),
-]
+TARGETS = [("apple-touch-icon.png", 180), ("icon-192.png", 192), ("icon-512.png", 512)]
 
 
-def _scale(value: float) -> float:
-    return value * SUPERSAMPLE / VIEWBOX
+def _rounded_corner(prev_pt, corner, next_pt, radius, steps=48):
+    """Points along the arc that rounds `corner`, tangent to both its edges."""
+    (cx, cy), (px, py), (nx, ny) = corner, prev_pt, next_pt
+    v1 = (px - cx, py - cy)
+    v2 = (nx - cx, ny - cy)
+    l1 = math.hypot(*v1)
+    l2 = math.hypot(*v2)
+    u1 = (v1[0] / l1, v1[1] / l1)
+    u2 = (v2[0] / l2, v2[1] / l2)
+
+    interior = math.acos(max(-1.0, min(1.0, u1[0] * u2[0] + u1[1] * u2[1])))
+    tangent = radius / math.tan(interior / 2)          # along each edge
+    centre_d = radius / math.sin(interior / 2)         # along the bisector
+
+    bis = (u1[0] + u2[0], u1[1] + u2[1])
+    bl = math.hypot(*bis)
+    centre = (cx + bis[0] / bl * centre_d, cy + bis[1] / bl * centre_d)
+
+    start = (cx + u1[0] * tangent, cy + u1[1] * tangent)
+    end = (cx + u2[0] * tangent, cy + u2[1] * tangent)
+    a0 = math.atan2(start[1] - centre[1], start[0] - centre[0])
+    a1 = math.atan2(end[1] - centre[1], end[0] - centre[0])
+    # Sweep the short way round.
+    while a1 - a0 > math.pi:
+        a1 -= 2 * math.pi
+    while a0 - a1 > math.pi:
+        a1 += 2 * math.pi
+
+    return [(centre[0] + radius * math.cos(a0 + (a1 - a0) * i / steps),
+             centre[1] + radius * math.sin(a0 + (a1 - a0) * i / steps))
+            for i in range(steps + 1)]
 
 
-def _gradient_background() -> Image.Image:
-    """Diagonal top-left -> bottom-right gradient, matching the SVG's linearGradient."""
-    img = Image.new("RGB", (SUPERSAMPLE, SUPERSAMPLE))
-    pixels = img.load()
-    span = 2 * (SUPERSAMPLE - 1)
-    for y in range(SUPERSAMPLE):
-        for x in range(SUPERSAMPLE):
-            t = (x + y) / span
-            pixels[x, y] = tuple(
-                round(a + (b - a) * t) for a, b in zip(GRADIENT_FROM, GRADIENT_TO, strict=True)
-            )
+def house_points(scale: float) -> list[tuple[float, float]]:
+    """The house outline as a dense polygon, ready for Pillow."""
+    pts: list[tuple[float, float]] = []
+    n = len(HOUSE_CORNERS)
+    for i, (corner, radius) in enumerate(HOUSE_CORNERS):
+        prev_pt = HOUSE_CORNERS[(i - 1) % n][0]
+        next_pt = HOUSE_CORNERS[(i + 1) % n][0]
+        pts.extend(_rounded_corner(prev_pt, corner, next_pt, radius))
+    return [(x * scale, y * scale) for x, y in pts]
+
+
+def svg() -> str:
+    """The vector icon, transparent outside the house like the rest of the family."""
+    path = []
+    n = len(HOUSE_CORNERS)
+    for i, (corner, radius) in enumerate(HOUSE_CORNERS):
+        prev_pt = HOUSE_CORNERS[(i - 1) % n][0]
+        next_pt = HOUSE_CORNERS[(i + 1) % n][0]
+        (cx, cy) = corner
+        v1 = (prev_pt[0] - cx, prev_pt[1] - cy)
+        v2 = (next_pt[0] - cx, next_pt[1] - cy)
+        l1, l2 = math.hypot(*v1), math.hypot(*v2)
+        u1 = (v1[0] / l1, v1[1] / l1)
+        u2 = (v2[0] / l2, v2[1] / l2)
+        interior = math.acos(max(-1.0, min(1.0, u1[0] * u2[0] + u1[1] * u2[1])))
+        t = radius / math.tan(interior / 2)
+        path.append((
+            (cx + u1[0] * t, cy + u1[1] * t),
+            (cx + u2[0] * t, cy + u2[1] * t),
+            radius,
+        ))
+
+    d = f"M{path[0][1][0]:g},{path[0][1][1]:g}"
+    for i in range(1, n + 1):
+        (t1, t2, r) = path[i % n]
+        d += f"L{t1[0]:g},{t1[1]:g}A{r:g},{r:g} 0 0 1 {t2[0]:g},{t2[1]:g}"
+    d += "Z"
+
+    bars = "\n    ".join(
+        f'<rect x="{256 - w / 2:g}" y="{y:g}" width="{w:g}" height="{BAR_H}" '
+        f'rx="{BAR_H / 2:g}"/>'
+        for y, w in BARS
+    )
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {BOX} {BOX}"
+     role="img" aria-label="Music Library">
+  <title>Music Library</title>
+  <path d="{d}" fill="{HOUSE}"/>
+  <g fill="{GLYPH}">
+    {bars}
+  </g>
+</svg>
+"""
+
+
+def build(opaque: bool) -> Image.Image:
+    scale = SUPERSAMPLE / BOX
+    mode = "RGB" if opaque else "RGBA"
+    bg = GROUND if opaque else (0, 0, 0, 0)
+    img = Image.new(mode, (SUPERSAMPLE, SUPERSAMPLE), bg)
+    draw = ImageDraw.Draw(img)
+
+    draw.polygon(house_points(scale), fill=HOUSE)
+    for y, w in BARS:
+        x0 = (256 - w / 2) * scale
+        draw.rounded_rectangle(
+            [x0, y * scale, x0 + w * scale, (y + BAR_H) * scale],
+            radius=BAR_H / 2 * scale, fill=GLYPH,
+        )
     return img
 
 
-def _draw_house(base: Image.Image) -> None:
-    """Translucent house outline — a separate layer so the 25% alpha composites properly."""
-    layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(layer)
-    points = [(128, 52), (56, 112), (56, 204), (200, 204), (200, 112)]
-    scaled = [(_scale(x), _scale(y)) for x, y in points]
-    width = round(_scale(10))
-    draw.line([*scaled, scaled[0]], fill=(255, 255, 255, 64), width=width, joint="curve")
-    # `joint="curve"` rounds the inner joints; the closing vertex needs its own cap.
-    radius = width / 2
-    for x, y in scaled:
-        draw.ellipse([x - radius, y - radius, x + radius, y + radius], fill=(255, 255, 255, 64))
-    base.alpha_composite(layer)
-
-
-def _rotated_note_head(cx: float, cy: float, rx: float, ry: float, angle: float) -> Image.Image:
-    """An ellipse rotated about its own centre, as its own transparent tile."""
-    box = round(_scale(max(rx, ry)) * 4)
-    tile = Image.new("RGBA", (box, box), (0, 0, 0, 0))
-    mid = box / 2
-    ImageDraw.Draw(tile).ellipse(
-        [mid - _scale(rx), mid - _scale(ry), mid + _scale(rx), mid + _scale(ry)],
-        fill=(255, 255, 255, 255),
-    )
-    return tile.rotate(angle, resample=Image.BICUBIC)
-
-
-def _draw_notes(base: Image.Image) -> None:
-    layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(layer)
-
-    for x, y, w, h in [(96, 88, 6, 80), (152, 76, 6, 80)]:           # stems
-        draw.rounded_rectangle(
-            [_scale(x), _scale(y), _scale(x + w), _scale(y + h)],
-            radius=_scale(3), fill=(255, 255, 255, 255),
-        )
-    draw.polygon(                                                     # beam
-        [(_scale(96), _scale(88)), (_scale(102), _scale(88)),
-         (_scale(158), _scale(76)), (_scale(152), _scale(76))],
-        fill=(255, 255, 255, 255),
-    )
-    for cx, cy in [(88, 168), (144, 156)]:                            # note heads
-        head = _rotated_note_head(cx, cy, 18, 13, 15)                 # SVG rotates -15deg
-        layer.alpha_composite(
-            head, (round(_scale(cx) - head.width / 2), round(_scale(cy) - head.height / 2))
-        )
-
-    base.alpha_composite(layer)
-
-
-def build() -> Image.Image:
-    icon = _gradient_background().convert("RGBA")
-    _draw_house(icon)
-    _draw_notes(icon)
-    return icon
-
-
 def main() -> None:
-    icon = build()
+    svg_path = OUT_DIR / "favicon.svg"
+    svg_path.write_text(svg(), encoding="utf-8")
+    print(f"{svg_path.relative_to(OUT_DIR.parents[2])}  {svg_path.stat().st_size} B")
+
+    icon = build(opaque=True)
     for name, size in TARGETS:
-        # RGB, not RGBA: iOS renders a transparent icon over black, and we want the gradient.
-        out = icon.resize((size, size), Image.LANCZOS).convert("RGB")
+        out = icon.resize((size, size), Image.LANCZOS)
         path = OUT_DIR / name
         out.save(path, "PNG", optimize=True)
         print(f"{path.relative_to(OUT_DIR.parents[2])}  {size}x{size}  {path.stat().st_size} B")
