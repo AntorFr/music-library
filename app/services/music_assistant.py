@@ -611,10 +611,15 @@ class MusicAssistantClient:
     async def get_podcast_episodes(
         self, item_id: str, provider: str
     ) -> list[MAMediaItem]:
-        """List episodes of a podcast.
+        """List episodes of a podcast, newest first.
 
         MA always re-fetches episodes from the provider so resume position
         info stays fresh — do not cache the result.
+
+        MA numbers episodes oldest to newest (the latest has the highest
+        ``position``), so sorting descending puts the latest episode on the
+        first page of every paginated consumer. Audiobook chapters keep reading
+        order — see :func:`normalize_chapters`.
         """
         result = await self._send_command(
             "music/podcasts/podcast_episodes",
@@ -622,7 +627,7 @@ class MusicAssistantClient:
             provider_instance_id_or_domain=provider,
         )
         episodes = [MAMediaItem(i) for i in (result or [])]
-        episodes.sort(key=lambda e: e.position)
+        episodes.sort(key=lambda e: e.position, reverse=True)
         return episodes
 
     async def get_library_podcasts(

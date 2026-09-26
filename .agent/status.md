@@ -1,8 +1,10 @@
 # Status — Music Library
 
-> MàJ : 2026-09-18
+> MàJ : 2026-09-26
 
-**État :** v0.23.1 — corrige un bug introduit par la v0.22.1 : un profil
+**État :** v0.24.0 — les épisodes de podcast sortent du plus récent au plus
+ancien — API dashboard et fiche web ; les chapitres de livres gardent l'ordre de
+lecture. Avant : v0.23.1 — corrige un bug introduit par la v0.22.1 : un profil
 accentué (« Sébastien ») revenait en « n'existe plus » à chaque retour sur
 Écouter, le cookie étant relu encodé (`S%C3%A9bastien`). Et nouvelle icône, alignée sur la charte Home Assistant :
 même silhouette de maison que HA / Music Assistant / ESPHome (#18BCF2, glyphe
@@ -20,6 +22,8 @@ lecture** branche l'API de contrôle MA — qui existait depuis les écrans
 embarqués mais que l'interface web n'appelait jamais. 108 tests verts.
 
 **Prochaines étapes :**
+- [ ] Vérifier sur l'instance MA réelle que le dernier épisode arrive bien en
+      tête (ordre déduit du code source de MA, pas observé)
 - [ ] Vérifier dans le navigateur : la barre de lecture (sondage, seek, volume)
       et la persistance profil/enceinte après un aller-retour par le menu
 - [ ] MA : provider « Spotify Laurine » (`spotify--yPK3Sfsf`) en

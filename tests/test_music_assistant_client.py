@@ -53,3 +53,22 @@ async def test_reader_accumulates_partial_results() -> None:
     ]
     assert ma._pending == {}
     assert ma._partial_results == {}
+
+
+@pytest.mark.asyncio
+async def test_podcast_episodes_newest_first(monkeypatch) -> None:
+    """MA numbers episodes oldest→newest; consumers page through them latest first."""
+    ma = MusicAssistantClient(url="http://music-assistant.local:8095")
+
+    async def fake_send(command: str, **kwargs: Any) -> list[dict[str, Any]]:
+        return [
+            {"name": "Ep 2", "position": 2},
+            {"name": "Ep 3", "position": 3},
+            {"name": "Ep 1", "position": 1},
+        ]
+
+    monkeypatch.setattr(ma, "_send_command", fake_send)
+
+    episodes = await ma.get_podcast_episodes("p1", "podcastfeed")
+
+    assert [e.name for e in episodes] == ["Ep 3", "Ep 2", "Ep 1"]

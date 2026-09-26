@@ -80,7 +80,7 @@ plus que leur propre sérialisation :
 | Fonction | Rôle |
 | --- | --- |
 | `resolve_ma_provider_and_id(item)` | couple `(provider, item_id)` cohérent depuis `source_uri` |
-| `fetch_podcast_episodes(ma, item)` | épisodes d'un podcast local, objets MA bruts |
+| `fetch_podcast_episodes(ma, item)` | épisodes d'un podcast local, objets MA bruts, du plus récent au plus ancien |
 | `fetch_audiobook(ma, item)` | le livre audio MA (chapitres, reprise, durée) |
 | `normalize_chapters(ma_item)` | chapitres en dicts triés, `end`/`duration` en secondes |
 

@@ -171,6 +171,9 @@ async def quick_children(
 ):
     """One page of a podcast's episodes / an audiobook's chapters (drill-down on scroll).
 
+    Episodes come newest first, so the first page holds the latest ones; chapters keep
+    reading order.
+
     Episodes carry their own `uri` (+ optional thumbnail, served via our `/thumb` proxy);
     chapters share the book `uri` and carry a `seek` offset (and no thumbnail).
     """
