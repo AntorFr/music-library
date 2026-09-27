@@ -10,8 +10,11 @@ constrained clients.
 
 from __future__ import annotations
 
+import asyncio
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -41,6 +44,12 @@ _CHILD_TYPES = {MediaType.podcast, MediaType.audiobook}
 
 # Default square size (px) for episode thumbnails served through our proxy cache.
 EPISODE_THUMB_PX = 96
+
+# `/children?keepalive=1`: how long to wait for a normal JSON answer before switching to a
+# streamed one, and the gap between the whitespace bytes sent while MA works. The gap must
+# stay well under the ESP's HTTP inactivity timeout (5 s).
+KEEPALIVE_FIRST_WAIT_S = 1.0
+KEEPALIVE_INTERVAL_S = 2.0
 
 
 @router.get("/thumb")
@@ -159,12 +168,50 @@ async def _audiobook_children(ma: MusicAssistantClient, item) -> list[QuickChild
     ]
 
 
+def _children_page(item, all_items: list[QuickChildItem], offset: int, limit: int) -> QuickChildrenResponse:
+    page = all_items[offset : offset + limit]
+    return QuickChildrenResponse(
+        parent_id=item.id,
+        media_type=item.media_type,
+        offset=offset,
+        limit=limit,
+        count=len(page),
+        has_more=(offset + limit) < len(all_items),
+        items=page,
+    )
+
+
+async def _keepalive_body(fetch: asyncio.Task, item, offset: int, limit: int):
+    """Stream the page once `fetch` finishes, sending a space every few seconds meanwhile.
+
+    Leading whitespace is valid JSON, so the client parses the body as usual; the spaces only
+    prove the request is still being worked on, which keeps an embedded client's inactivity
+    timeout from firing while MA is slow. The status line (200) is already sent by then, so a
+    failure is reported in the body as ``{"detail": ...}`` without ``items``.
+    """
+    while True:
+        done, _ = await asyncio.wait({fetch}, timeout=KEEPALIVE_INTERVAL_S)
+        if done:
+            break
+        yield b" "
+    exc = fetch.exception()
+    if exc is not None:
+        yield json.dumps({"detail": f"Music Assistant: {exc}"}).encode()
+        return
+    yield _children_page(item, fetch.result(), offset, limit).model_dump_json().encode()
+
+
 @router.get("/item/{media_id}/children", response_model=QuickChildrenResponse)
 async def quick_children(
     request: Request,
     media_id: str,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
+    keepalive: bool = Query(
+        False,
+        description="Stream whitespace while Music Assistant is slow, then the JSON page "
+        "(for clients with a short inactivity timeout).",
+    ),
     db: AsyncSession = Depends(get_db),
     ma: MusicAssistantClient = Depends(get_ma_client),
     user: CurrentUser = Depends(get_current_user),
@@ -176,6 +223,10 @@ async def quick_children(
 
     Episodes carry their own `uri` (+ optional thumbnail, served via our `/thumb` proxy);
     chapters share the book `uri` and carry a `seek` offset (and no thumbnail).
+
+    A provider-backed podcast can take tens of seconds on a cold MA cache. With
+    `keepalive=1`, an answer that is not ready within a second is streamed: whitespace every
+    few seconds, then the page (or `{"detail": ...}` on failure) — see `_keepalive_body`.
     """
     item = await media_service.get_media(db, media_id)
     ensure_media_access(user, item)
@@ -183,21 +234,22 @@ async def quick_children(
         raise HTTPException(400, detail="Ce média n'a pas d'épisodes/chapitres")
 
     base = str(request.base_url).rstrip("/")
+    if item.media_type == MediaType.podcast:
+        fetch = asyncio.ensure_future(_podcast_children(ma, item, base))
+    else:
+        fetch = asyncio.ensure_future(_audiobook_children(ma, item))
+    # A streamed request whose client hung up never reads the outcome: mark it retrieved so
+    # a failure isn't logged as "Task exception was never retrieved".
+    fetch.add_done_callback(lambda t: t.cancelled() or t.exception())
+
+    if keepalive:
+        done, _ = await asyncio.wait({fetch}, timeout=KEEPALIVE_FIRST_WAIT_S)
+        if not done:
+            return StreamingResponse(
+                _keepalive_body(fetch, item, offset, limit), media_type="application/json"
+            )
     try:
-        if item.media_type == MediaType.podcast:
-            all_items = await _podcast_children(ma, item, base)
-        else:
-            all_items = await _audiobook_children(ma, item)
+        all_items = await fetch
     except Exception as exc:
         raise HTTPException(502, detail=f"Music Assistant: {exc}") from exc
-
-    page = all_items[offset : offset + limit]
-    return QuickChildrenResponse(
-        parent_id=item.id,
-        media_type=item.media_type,
-        offset=offset,
-        limit=limit,
-        count=len(page),
-        has_more=(offset + limit) < len(all_items),
-        items=page,
-    )
+    return _children_page(item, all_items, offset, limit)

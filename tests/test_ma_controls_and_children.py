@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import asyncio
+import json
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -333,3 +336,105 @@ async def test_web_chapters_resolve_via_source_uri(client, db, web_ma):
     body = r.text
     assert "Impossible de charger les chapitres" not in body
     assert body.index("Le vivier") < body.index("Le survivant")
+
+
+# --- Children: slow MA (single-flight + keepalive stream) -------------------
+
+class SlowMA(FakeMA):
+    """An MA whose episode fetch blocks until the test releases it (or fails)."""
+
+    def __init__(self):
+        super().__init__()
+        self.release = asyncio.Event()
+        self.fail: Exception | None = None
+
+    async def get_podcast_episodes(self, item_id, provider):
+        self.calls.append(("episodes", item_id, provider))
+        await self.release.wait()
+        if self.fail is not None:
+            raise self.fail
+        return self.episodes
+
+
+@pytest.fixture
+def slow_ma():
+    return SlowMA()
+
+
+@pytest.fixture
+async def slow_client(db: AsyncSession, slow_ma: SlowMA, monkeypatch):
+    from app.api import quick
+
+    monkeypatch.setattr(quick, "KEEPALIVE_FIRST_WAIT_S", 0.05)
+    monkeypatch.setattr(quick, "KEEPALIVE_INTERVAL_S", 0.05)
+
+    async def override_get_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_ma_client] = lambda: slow_ma
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        yield ac
+    app.dependency_overrides.clear()
+
+
+async def _release_later(ma: SlowMA, delay: float = 0.3):
+    await asyncio.sleep(delay)
+    ma.release.set()
+
+
+@pytest.mark.asyncio
+async def test_children_concurrent_requests_share_one_ma_call(slow_client, db, slow_ma):
+    item = await _create(db, title="Laylo", media_type=MediaType.podcast, uri="spotify://podcast/p1")
+    slow_ma.episodes = [FakeEpisode("Ep1", "spotify://episode/e1", 1)]
+    url = f"/api/v1/quick/item/{item.id}/children"
+
+    r1, r2, _ = await asyncio.gather(
+        slow_client.get(url), slow_client.get(url), _release_later(slow_ma)
+    )
+    assert r1.status_code == r2.status_code == 200
+    assert r1.json()["items"][0]["title"] == r2.json()["items"][0]["title"] == "Ep1"
+    assert [c for c in slow_ma.calls if c[0] == "episodes"] == [("episodes", "p1", "spotify")]
+
+
+@pytest.mark.asyncio
+async def test_children_keepalive_streams_whitespace_then_page(slow_client, db, slow_ma):
+    item = await _create(db, title="Laylo", media_type=MediaType.podcast, uri="spotify://podcast/p1")
+    slow_ma.episodes = [FakeEpisode("Ep1", "spotify://episode/e1", 1)]
+
+    r, _ = await asyncio.gather(
+        slow_client.get(f"/api/v1/quick/item/{item.id}/children?keepalive=1"),
+        _release_later(slow_ma),
+    )
+    assert r.status_code == 200
+    assert r.text.startswith(" ")  # heartbeats sent while MA was busy
+    data = json.loads(r.text)      # leading whitespace is valid JSON
+    assert data["count"] == 1
+    assert data["items"][0]["title"] == "Ep1"
+
+
+@pytest.mark.asyncio
+async def test_children_keepalive_reports_failure_in_body(slow_client, db, slow_ma):
+    item = await _create(db, title="Laylo", media_type=MediaType.podcast, uri="spotify://podcast/p1")
+    slow_ma.fail = TimeoutError("MA command timed out after 60s")
+
+    r, _ = await asyncio.gather(
+        slow_client.get(f"/api/v1/quick/item/{item.id}/children?keepalive=1"),
+        _release_later(slow_ma),
+    )
+    assert r.status_code == 200    # status was sent before the failure was known
+    data = json.loads(r.text)
+    assert "items" not in data
+    assert "timed out" in data["detail"]
+
+
+@pytest.mark.asyncio
+async def test_children_keepalive_fast_answer_is_plain_json(client, db, fake_ma):
+    item = await _create(db, title="Henri", media_type=MediaType.podcast, uri="spotify://podcast/p1")
+    fake_ma.episodes = [FakeEpisode("Ep1", "spotify://episode/e1", 1)]
+
+    r = await client.get(f"/api/v1/quick/item/{item.id}/children?keepalive=1")
+    assert r.status_code == 200
+    assert not r.text.startswith(" ")
+    assert r.json()["items"][0]["title"] == "Ep1"

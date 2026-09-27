@@ -229,6 +229,32 @@ def resolve_ma_provider_and_id(item: Any) -> tuple[str | None, str | None]:
     return provider, item_id
 
 
+# Episode fetches currently running, keyed by (provider, item_id). A provider-backed podcast
+# (e.g. Spotify) can take tens of seconds on a cold MA cache; clients that give up and retry
+# must not stack identical MA commands on top of the one still running.
+_episode_fetches: dict[tuple[str, str], asyncio.Task[list[MAMediaItem]]] = {}
+
+
+async def _single_flight_episodes(
+    ma: MusicAssistantClient, provider: str, item_id: str
+) -> list[MAMediaItem]:
+    """Join the running fetch for this podcast, or start one.
+
+    This is request coalescing, not a cache: the entry is dropped as soon as MA answers, so
+    the next request re-asks MA (resume positions stay fresh). The fetch runs in its own
+    task and callers await it through ``shield``: a caller that disconnects does not cancel
+    the fetch the other callers are waiting on.
+    """
+    key = (provider, item_id)
+    task = _episode_fetches.get(key)
+    if task is None:
+        task = asyncio.create_task(ma.get_podcast_episodes(item_id, provider))
+        _episode_fetches[key] = task
+        task.add_done_callback(lambda t: _episode_fetches.pop(key, None))
+    episodes = await asyncio.shield(task)
+    return list(episodes)  # each caller gets its own list
+
+
 async def fetch_podcast_episodes(
     ma: MusicAssistantClient, item: Any
 ) -> list[MAMediaItem]:
@@ -236,13 +262,14 @@ async def fetch_podcast_episodes(
 
     Callers serialise them their own way (HTMX template vs embedded-client JSON); what
     they must NOT own is *how the item is addressed* — see
-    :func:`resolve_ma_provider_and_id`.
+    :func:`resolve_ma_provider_and_id`. Concurrent requests for the same podcast share one
+    MA command (see :func:`_single_flight_episodes`).
     """
     provider, item_id = resolve_ma_provider_and_id(item)
     if not provider or not item_id:
         ma_item = await ma.get_item_by_uri(getattr(item, "source_uri", "") or "")
         provider, item_id = ma_item.provider, ma_item.item_id
-    return await ma.get_podcast_episodes(item_id, provider)
+    return await _single_flight_episodes(ma, provider, item_id)
 
 
 async def fetch_audiobook(ma: MusicAssistantClient, item: Any) -> MAMediaItem:

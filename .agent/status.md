@@ -1,8 +1,11 @@
 # Status — Music Library
 
-> MàJ : 2026-09-26
+> MàJ : 2026-09-27
 
-**État :** v0.24.0 — les épisodes de podcast sortent du plus récent au plus
+**État :** (non publié) `/children?keepalive=1` — un podcast Spotify lent (43 s à froid
+côté MA, cas Laylo) n'éjecte plus la tablette : espaces envoyés toutes les 2 s puis la page ;
+et les demandes identiques en vol partagent une seule commande MA (pas de cache). Avant :
+v0.24.0 — les épisodes de podcast sortent du plus récent au plus
 ancien — API dashboard et fiche web ; les chapitres de livres gardent l'ordre de
 lecture. Avant : v0.23.1 — corrige un bug introduit par la v0.22.1 : un profil
 accentué (« Sébastien ») revenait en « n'existe plus » à chaque retour sur
