@@ -2,7 +2,7 @@
 
 > MàJ : 2026-09-27
 
-**État :** (non publié) `/children?keepalive=1` — un podcast Spotify lent (43 s à froid
+**État :** v0.25.0 — `/children?keepalive=1` — un podcast Spotify lent (43 s à froid
 côté MA, cas Laylo) n'éjecte plus la tablette : espaces envoyés toutes les 2 s puis la page ;
 et les demandes identiques en vol partagent une seule commande MA (pas de cache). Avant :
 v0.24.0 — les épisodes de podcast sortent du plus récent au plus
