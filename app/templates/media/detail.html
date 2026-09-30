@@ -53,6 +53,18 @@
     <!-- RFID tags -->
     {% include "components/rfid_block.html" %}
 
+    {% if spotify_switchable and current_user.is_parent %}
+    <div class="card mt-3" id="spotify-account"
+         hx-get="/media/{{ item.id }}/spotify-account"
+         hx-trigger="load"
+         hx-swap="outerHTML">
+      <div class="card-body">
+        <h3 class="mb-2"><i class="mdi mdi-spotify"></i> Compte Spotify</h3>
+        <div class="spinner"></div>
+      </div>
+    </div>
+    {% endif %}
+
     <div class="detail-actions">
       {% if players %}
       <div class="d-flex align-center gap-2">

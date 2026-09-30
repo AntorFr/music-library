@@ -21,7 +21,7 @@ from app.config import settings
 from app.database import get_db
 from app.models.media import MediaType
 from app.schemas.media import MediaCreate, MediaUpdate
-from app.services import cover_service, media_service, rfid_service
+from app.services import cover_service, media_service, rfid_service, spotify_accounts
 from app.services.auth_service import get_current_user, normalize_owner
 from app.services.ma_import import import_ma_item
 from app.services.permissions import (
@@ -154,7 +154,7 @@ async def _ma_status() -> dict:
         status["players"] = len(await ma.get_players())
         status["reachable"] = True
         try:
-            configs = await ma._send_command("config/providers")
+            configs = await ma.get_provider_configs()
             status["broken_providers"] = [
                 {"name": c.get("name") or c.get("instance_id"), "error": c.get("last_error")}
                 for c in (configs or [])
@@ -530,7 +530,69 @@ async def media_detail(request: Request, media_id: str, db: AsyncSession = Depen
         available_tag_options=available_tag_options,
         assigned_rfid=assigned_rfid,
         available_rfid=available_rfid,
+        spotify_switchable=spotify_accounts.is_switchable(item),
     ))
+
+
+async def _spotify_account_block(
+    request: Request, item: Any, *, error: str | None = None
+) -> HTMLResponse:
+    """The "Compte Spotify" card: MA's Spotify accounts, the current one selected."""
+    accounts: list[dict] = []
+    load_error: str | None = None
+    try:
+        from app.services.music_assistant import get_ma_client
+        accounts = await spotify_accounts.list_accounts(await get_ma_client())
+    except Exception as exc:
+        logger.warning("Spotify accounts unavailable: %s", exc)
+        load_error = str(exc)
+    return templates.TemplateResponse(request, "components/spotify_account.html", _base_ctx(
+        request,
+        item=item,
+        accounts=accounts,
+        current=spotify_accounts.current_account(item),
+        error=error or load_error,
+    ))
+
+
+@router.get("/media/{media_id}/spotify-account", response_class=HTMLResponse)
+async def media_spotify_account(
+    request: Request, media_id: str, db: AsyncSession = Depends(get_db)
+):
+    """HTMX partial: the account picker, loaded after the page (it asks MA)."""
+    ensure_parent(get_current_user(request))
+    item = await media_service.get_media(db, media_id)
+    if not item:
+        raise HTTPException(404, detail="Média introuvable")
+    return await _spotify_account_block(request, item)
+
+
+@router.post("/media/{media_id}/spotify-account", response_class=HTMLResponse)
+async def media_set_spotify_account(
+    request: Request,
+    media_id: str,
+    account: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Pin the media to one Spotify account, after checking it returns content.
+
+    On success the whole page reloads: the play button, the episode list and the
+    source URI shown below all derive from the URI that just changed.
+    """
+    ensure_parent(get_current_user(request))
+    item = await media_service.get_media(db, media_id)
+    if not item:
+        raise HTTPException(404, detail="Média introuvable")
+    try:
+        from app.services.music_assistant import get_ma_client
+        await spotify_accounts.switch_account(db, await get_ma_client(), item, account)
+    except spotify_accounts.AccountSwitchError as exc:
+        return await _spotify_account_block(request, item, error=str(exc))
+    except Exception as exc:
+        logger.warning("Spotify account switch failed for %s: %s", media_id, exc)
+        return await _spotify_account_block(request, item, error=f"Music Assistant : {exc}")
+    await db.commit()
+    return HTMLResponse("", headers={"HX-Refresh": "true"})
 
 
 @router.get("/media/{media_id}/episodes", response_class=HTMLResponse)

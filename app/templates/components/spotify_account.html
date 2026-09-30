@@ -1,0 +1,45 @@
+{# Partial: which Spotify account (MA provider instance) the media goes through #}
+<div class="card mt-3" id="spotify-account">
+  <div class="card-body">
+    <h3 class="mb-2"><i class="mdi mdi-spotify"></i> Compte Spotify</h3>
+
+    {% if accounts %}
+    <form class="d-flex gap-2 align-center"
+          hx-post="/media/{{ item.id }}/spotify-account"
+          hx-trigger="change"
+          hx-target="#spotify-account"
+          hx-swap="outerHTML"
+          hx-indicator="#spotify-account-spinner">
+      <select name="account" class="form-control"
+              style="max-width:320px;padding:6px 10px;font-size:0.85rem"
+              aria-label="Compte Spotify utilisé pour ce média">
+        {% if not current %}
+        <option value="" selected disabled>Automatique (bibliothèque Music Assistant)</option>
+        {% endif %}
+        {% for a in accounts %}
+        <option value="{{ a.instance_id }}"
+                {% if a.instance_id == current %}selected{% endif %}
+                {% if not a.usable %}disabled{% endif %}>
+          {{ a.name }}{% if not a.usable %} — {{ a.error or "indisponible" }}{% endif %}
+        </option>
+        {% endfor %}
+      </select>
+      <div id="spotify-account-spinner" class="spinner htmx-indicator"></div>
+    </form>
+    <p class="text-muted text-sm mt-2">
+      {% if current %}
+      Les épisodes et la lecture passent par ce compte.
+      {% else %}
+      Music Assistant choisit le compte lui-même, et peut tomber sur un compte en panne.
+      {% endif %}
+      Le changement n'est enregistré que si le compte renvoie bien du contenu.
+    </p>
+    {% endif %}
+
+    {% if error %}
+    <div class="text-danger text-sm mt-2"><i class="mdi mdi-alert-circle"></i> {{ error }}</div>
+    {% elif not accounts %}
+    <div class="text-muted text-sm">Aucun compte Spotify configuré dans Music Assistant.</div>
+    {% endif %}
+  </div>
+</div>

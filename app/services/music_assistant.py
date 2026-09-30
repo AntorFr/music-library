@@ -657,6 +657,32 @@ class MusicAssistantClient:
         episodes.sort(key=lambda e: e.position, reverse=True)
         return episodes
 
+    async def get_playlist_tracks(
+        self, item_id: str, provider: str
+    ) -> list[MAMediaItem]:
+        """List the tracks of a playlist, as seen through one provider instance."""
+        result = await self._send_command(
+            "music/playlists/playlist_tracks",
+            item_id=item_id,
+            provider_instance_id_or_domain=provider,
+        )
+        return [MAMediaItem(i) for i in (result or [])]
+
+    async def get_album_tracks(
+        self, item_id: str, provider: str
+    ) -> list[MAMediaItem]:
+        """List the tracks of an album, as seen through one provider instance."""
+        result = await self._send_command(
+            "music/albums/album_tracks",
+            item_id=item_id,
+            provider_instance_id_or_domain=provider,
+        )
+        return [MAMediaItem(i) for i in (result or [])]
+
+    async def get_provider_configs(self) -> list[dict]:
+        """Every configured provider instance, loaded or not (``status``, ``last_error``)."""
+        return await self._send_command("config/providers") or []
+
     async def get_library_podcasts(
         self, search: str | None = None, limit: int | None = None
     ) -> list[MAMediaItem]:

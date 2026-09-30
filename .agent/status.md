@@ -1,8 +1,12 @@
 # Status — Music Library
 
-> MàJ : 2026-09-27
+> MàJ : 2026-09-30
 
-**État :** v0.25.0 — `/children?keepalive=1` — un podcast Spotify lent (43 s à froid
+**État :** v0.26.0 — la fiche d'un podcast / playlist / album Spotify a un bloc
+« Compte Spotify » (parents) : il épingle le média sur un compte MA en réécrivant
+`source_uri` en URI d'instance, après avoir vérifié que ce compte renvoie du contenu.
+Motif : en `library://`, MA tire un compte au hasard, compte mort compris → 0 épisode.
+Avant : v0.25.0 — `/children?keepalive=1` — un podcast Spotify lent (43 s à froid
 côté MA, cas Laylo) n'éjecte plus la tablette : espaces envoyés toutes les 2 s puis la page ;
 et les demandes identiques en vol partagent une seule commande MA (pas de cache). Avant :
 v0.24.0 — les épisodes de podcast sortent du plus récent au plus
@@ -29,10 +33,11 @@ embarqués mais que l'interface web n'appelait jamais. 108 tests verts.
       tête (ordre déduit du code source de MA, pas observé)
 - [ ] Vérifier dans le navigateur : la barre de lecture (sondage, seek, volume)
       et la persistance profil/enceinte après un aller-retour par le menu
-- [ ] MA : provider « Spotify Laurine » (`spotify--yPK3Sfsf`) en
-      `Configuration is invalid` mais toujours activé → premier mapping de
-      Wyktaur/Pokémon/Les Odyssées, qui renvoient 0 épisode. L'onglet Système
-      le signale désormais ; reste à ré-authentifier ou désactiver.
+- [ ] Vérifier une vraie lecture sur enceinte d'un média épinglé sur un compte
+      (liste d'épisodes vérifiée en réel, lecture pas encore)
+- [ ] MA : compte Spotify `spotify--yPK3Sfsf` désactivé (login en échec) ; les
+      médias des enfants sont épinglés sur Maison. Reste à repasser ceux des
+      adultes encore en `library://` via le nouveau bloc « Compte Spotify ».
 - [ ] HA : ajouter `music_library_token` dans secrets.yaml sur la box + reload
 - [ ] `media/form.html` garde ses branches `{% if item %}` alors qu'il ne sert
       plus que l'édition — nettoyage cosmétique, sans effet visible

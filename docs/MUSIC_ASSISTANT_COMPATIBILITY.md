@@ -54,6 +54,8 @@ Commandes WebSocket utilisées :
 | Item par type/id | `music/item` | `media_type`, `item_id`, `provider_instance_id_or_domain` |
 | Bibliothèque | `music/{playlists,albums,tracks,radios,audiobooks,podcasts}/library_items` | `search`, `limit` |
 | Épisodes podcast | `music/podcasts/podcast_episodes` | `item_id`, `provider_instance_id_or_domain` |
+| Pistes playlist / album | `music/playlists/playlist_tracks`, `music/albums/album_tracks` | `item_id`, `provider_instance_id_or_domain` |
+| Comptes configurés | `config/providers` | aucun |
 | Players | `players/all` | aucun |
 | Queues | `player_queues/all` | aucun |
 | Lecture | `player_queues/play_media` | `queue_id`, `media`, `option`, `radio_mode` |
@@ -86,6 +88,36 @@ plus que leur propre sérialisation :
 
 L'import MA → catalogue local vit lui dans `app/services/ma_import.py`, partagé par
 `/api/v1/ma/import` et `/browse/import`.
+
+### Épingler un média sur un compte Spotify (v0.26.0)
+
+Constaté sur MA 2.10.3 avec trois comptes Spotify, dont un en échec de connexion.
+
+**Une URI `library://` laisse MA choisir le compte, et il choisit mal.**
+`_select_provider_id` (`controllers/music/media/base.py`) prend le premier élément
+de `provider_mappings`. C'est un `set`, donc sans ordre stable d'un redémarrage à
+l'autre. Il ne vérifie pas non plus que l'instance est chargée. Si le choix tombe
+sur un compte mort, la liste d'épisodes ou de pistes revient **vide, sans erreur**.
+Désactiver le compte dans MA ne suffit pas : le mapping reste, et il peut encore
+être tiré.
+
+**Une URI d'instance épingle le compte :** `spotify--ThNy9kHW://podcast/<id>`. La
+fiche web comme l'API de la tablette passent `(instance, id)` directement à
+`podcast_episodes`, sans passer par la bibliothèque. L'id Spotify est le même sous
+tous les comptes. Le bloc « Compte Spotify » de la fiche média (parents seulement)
+réécrit `source_uri` en ce sens (`app/services/spotify_accounts.py`) :
+
+- la liste vient de `config/providers` ; seules les instances `status == "loaded"`
+  sont sélectionnables, les autres sont affichées grisées avec leur `last_error` ;
+- depuis `library://`, l'id Spotify est lu dans les `provider_mappings` de l'item
+  de bibliothèque ;
+- rien n'est écrit si le compte visé renvoie 0 épisode ou 0 piste. C'est le cas
+  d'une playlist privée qu'un autre compte ne voit pas.
+
+À la lecture, MA peut encore ajouter d'autres instances Spotify **chargées** comme
+solutions de repli pour le flux (`_get_streamdetail_candidates`,
+`controllers/streams/audio.py`). Ce n'est pas gênant : un compte mort n'est plus
+chargé, il n'en fait donc pas partie.
 
 ### Le contrôle de lecture est appelé depuis le navigateur (v0.22.0)
 
