@@ -80,7 +80,9 @@ applies to any tag cut.
 
 Three documents under `docs/quality/`: `coverage.md` (per-module coverage,
 refreshed by the net slice; also lists the doubtful behaviours kept as they are), `security-review.md` (B-4), `recommendations.md`
-(B-7). No other location.
+(B-7). No other location, with one transient exception: the net slice's test tasks leave
+fragments `docs/quality/douteux/<task>.md`, which its coverage task merges into `coverage.md`
+and deletes (none remains once the slice is done).
 
 ## Known gaps (inputs of the pass)
 
@@ -89,3 +91,35 @@ image); 14 test files (2514 lines) exist but coverage is unmeasured (122 tests p
 2026-11-05; `ruff check` reports 148 errors then); `views.py` (1179 lines) and `music_assistant.py` (990)
 dominate; `docs/PLAN.md` is a six-phase plan from before v0.1; `TODO.md` holds
 backlog items to move to the recommendations.
+
+## Net slice (`music-library-qualite-filet`)
+
+### AD-filet-1 — Test conventions of the net
+
+New tests live in `tests/`, one file per domain, in the style of `tests/test_nav_v2.py`:
+a temporary SQLite file engine, `Base.metadata.create_all`, `seed_default_tags`,
+`get_db` overridden, `httpx.AsyncClient` on `ASGITransport(app)`. Music Assistant is
+always behind a stub (no network); the real `app.main.app` is used, no private
+import of a service is tested (AD-2). Existing test files are not edited. A test
+pins what the code does at v0.26.0; a doubtful behaviour is pinned as is and
+listed in `docs/quality/coverage.md` under « Comportements douteux conservés »
+(test, finding, origin). Each test task writes its doubtful findings in its own fragment
+`docs/quality/douteux/<task>.md`; the coverage task merges them into `coverage.md` and deletes them.
+
+Startup tests: `init_db` uses the module-global `app.database.engine`, so a startup test
+replaces `engine` and `async_session` with ones on the sample database through
+`monkeypatch.setattr` on `app.database` only (`app.main` has no module-level `engine`
+or `async_session`: it imports `init_db` and, inside the lifespan, `async_session` from
+`app.database`, so the patch is seen), and stubs Music Assistant before the lifespan runs.
+
+### AD-filet-2 — The schema evolves in `init_db`, not in Alembic
+
+The repository holds no Alembic migration: `alembic` is a dependency, but the
+schema is created by `create_all` and upgraded by the one hand-written step of
+`app/database.py::init_db` (`tag_categories.color`). The net's « startup and
+migrations » domain therefore pins `init_db` and the app lifespan on a sample
+database in the previous schema (a `tag_categories` without `color`), and on an
+empty one. The absence of Alembic migrations is listed in « Comportements
+douteux conservés » as a finding for the recommendations slice. (AD-5 above says
+« Alembic migrations are not rewritten »: there are none; the rule stands for
+any that appear.)
