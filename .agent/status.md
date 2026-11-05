@@ -8,8 +8,8 @@ permissions par tag, MA derrière un stub, comptes Spotify, RFID, ESP, démarrag
 Couverture 67 % (`pytest --cov=app`), par module dans `docs/quality/coverage.md`, avec les
 zones sans test et 15 comportements douteux épinglés tels quels (aucun code de `app/` modifié).
 Il n'existe aucune migration Alembic : le schéma évolue dans `init_db` (AD-filet-2).
-Lancer : `pip install -e '.[dev]' && pytest` ; l'app sans MA : `ML_DATABASE_URL=sqlite+aiosqlite:///data/library.db python -m app.server`
-puis `curl localhost:8000/api/v1/health` (MA injoignable n'empêche pas le démarrage).
+Lancer (Python ≥ 3.12, dans un venv : `python3 -m venv .venv && . .venv/bin/activate`) : `pip install -e '.[dev]' && pytest` ; l'app sans MA : `ML_DATABASE_URL=sqlite+aiosqlite:///data/library.db python -m app.server`
+(crée `data/` au besoin ; ports 8000 app, 8001 API ESP) puis `curl localhost:8000/api/v1/health` (pas `/health`) (MA injoignable n'empêche pas le démarrage).
 Piège : `default_cover` est un chemin relatif ; hors `app/` ou `/app`, la route de couverture par défaut répond 500.
 
 **État produit :** v0.26.0 — la fiche d'un podcast / playlist / album Spotify a un bloc
@@ -36,7 +36,7 @@ servait d'accueil, et la page Lecteurs qui listait les enceintes sans un seul
 bouton. Les filtres du catalogue passent du mur de `<select>` à des pastilles
 qui sont des liens (chaque état de filtre est une URL). Enfin, la **barre de
 lecture** branche l'API de contrôle MA — qui existait depuis les écrans
-embarqués mais que l'interface web n'appelait jamais. 108 tests verts.
+embarqués mais que l'interface web n'appelait jamais. (À l'époque : 108 tests ; aujourd'hui 466.)
 
 **Prochaines étapes :**
 - [ ] Vérifier sur l'instance MA réelle que le dernier épisode arrive bien en

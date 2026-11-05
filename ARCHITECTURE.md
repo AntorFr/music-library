@@ -87,8 +87,9 @@ and deletes (none remains once the slice is done).
 ## Known gaps (inputs of the pass)
 
 No README, no ADR directory; no CI runs the tests (the only workflow builds the
-image); 14 test files (2514 lines) exist but coverage is unmeasured (122 tests pass on main at v0.26.0, measured by Skippy,
-2026-11-05; `ruff check` reports 148 errors then); `views.py` (1179 lines) and `music_assistant.py` (990)
+image); the 14 original test files (122 tests) are now completed by the net slice (466 tests,
+67 % line coverage, per module in `docs/quality/coverage.md`); `ruff check` reported 148 errors
+before the net slice and is not yet clean; `views.py` (1179 lines) and `music_assistant.py` (990)
 dominate; `docs/PLAN.md` is a six-phase plan from before v0.1; `TODO.md` holds
 backlog items to move to the recommendations.
 
