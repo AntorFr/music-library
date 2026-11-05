@@ -68,8 +68,8 @@ Test that must fail without it: a child session listing/resolving a tag assigned
 another owner (expects the tag filtered / 404); a parent and the bearer token still get 200 and the
 full list. The existing test above pins an untagged media read by a child and will then need the
 tester's decision.
-**Owner's answer:** _pending — to be copied here from the discussion of the task after `pilote arbitrer`._
-**Applied:** _no (waiting for the answer)._
+**Owner's answer:** Decision of the owner (2026-11-05), option (a): fix ACCEPTED. `GET /api/v1/rfid` filters by `can_view_media` and `GET /api/v1/rfid/<uid>/media` answers 404 for media outside the signed-in child's scope; parents, bearer token and dev mode unchanged. Applied under a test that fails without it; `test_a_child_can_still_read_and_resolve` to be revisited accordingly. S-9 (ESP port 8001 without auth): no answer, stays a recommendation.
+**Applied:** yes — `app/api/rfid.py` (both routes inject `get_current_user`). The tester adds the failing-without-fix test.
 
 **S-2 — fixed — a non-ASCII `Authorization: Bearer` value gave an unauthenticated 500.**
 Threat: row 3, machine-caller token.
