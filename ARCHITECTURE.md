@@ -82,6 +82,38 @@ Three documents under `docs/quality/`: `coverage.md` (per-module coverage,
 refreshed by the net slice; also lists the doubtful behaviours kept as they are), `security-review.md` (B-4), `recommendations.md`
 (B-7). No other location.
 
+### AD-doc-1 — The docs are written from the final code, and checked by script
+
+Slice `music-library-qualite-doc` runs after the refactoring: every list in the
+docs is read from the code as it is then, never from an older document. Sources:
+environment variables = the fields of `Settings` in `app/config.py` (prefix
+`ML_`, upper-cased) plus any `os.environ` read in `app/`; CI commands = the
+`run:` steps of `.github/workflows/ci.yml`; modules = the files of `app/`.
+Each task states in its review the check it ran (variable ↔ README table,
+module ↔ `ARCHITECTURE.md`, relative links resolved). A statement the code does
+not confirm is dropped, not softened.
+*Rejected:* editing the old documents in place from memory — they are the ones
+that drifted.
+
+### AD-doc-2 — What survives of the old documents
+
+`ARCHITECTURE.md` gets a section « Durable decisions » listing the decisions
+that still govern the final code, and `docs/adr/` holds exactly one ADR per
+entry (`NNNN-title.md`, from `0001`; Context, Decision, Rejected,
+Consequences). Candidates, each kept only if the code still shows it: OIDC
+client with parent/child roles by owner tag and the open dev mode; the static
+bearer token for machine calls; Music Assistant as the source of playback and
+its Spotify account pinning by `source_uri`; the signed thumbnail proxy; SQLite
+with Alembic migrations run at startup; the separate ESP port; shared in-flight
+Music Assistant commands and the `keepalive` page. `.agent/status.md` keeps
+the current version, the open checks that are still open and the pointer to
+`docs/quality/recommendations.md`; the version-by-version history goes (git
+holds it). `docs/PLAN.md` and `docs/REQUIREMENTS.md` get a historical banner and
+a short list of known divergences from the code, nothing rewritten;
+`docs/AUTH.md` is corrected against `app/services/auth_service.py` and
+`permissions.py`. `docs/MUSIC_ASSISTANT_COMPATIBILITY.md` is not in the pass.
+*Rejected:* rewriting `PLAN.md` — AD-3 says cut or mark.
+
 ## Known gaps (inputs of the pass)
 
 No README, no ADR directory; no CI runs the tests (the only workflow builds the
