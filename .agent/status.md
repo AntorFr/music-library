@@ -1,8 +1,18 @@
 # Status — Music Library
 
-> MàJ : 2026-09-30
+> MàJ : 2026-11-05
 
-**État :** v0.26.0 — la fiche d'un podcast / playlist / album Spotify a un bloc
+**Filet de tests (passe qualité, tranche `music-library-qualite-filet`) :** 466 tests verts
+(122 existants intacts + 344 de caractérisation : pages, `/health`, couvertures, API REST,
+permissions par tag, MA derrière un stub, comptes Spotify, RFID, ESP, démarrage/`init_db`).
+Couverture 67 % (`pytest --cov=app`), par module dans `docs/quality/coverage.md`, avec les
+zones sans test et 15 comportements douteux épinglés tels quels (aucun code de `app/` modifié).
+Il n'existe aucune migration Alembic : le schéma évolue dans `init_db` (AD-filet-2).
+Lancer : `pip install -e '.[dev]' && pytest` ; l'app sans MA : `ML_DATABASE_URL=sqlite+aiosqlite:///data/library.db python -m app.server`
+puis `curl localhost:8000/api/v1/health` (MA injoignable n'empêche pas le démarrage).
+Piège : `default_cover` est un chemin relatif ; hors `app/` ou `/app`, la route de couverture par défaut répond 500.
+
+**État produit :** v0.26.0 — la fiche d'un podcast / playlist / album Spotify a un bloc
 « Compte Spotify » (parents) : il épingle le média sur un compte MA en réécrivant
 `source_uri` en URI d'instance, après avoir vérifié que ce compte renvoie du contenu.
 Motif : en `library://`, MA tire un compte au hasard, compte mort compris → 0 épisode.
