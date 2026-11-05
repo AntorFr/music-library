@@ -68,7 +68,9 @@ no valid session or token can exploit it, when a child can read or write
 another owner's media, or when a Spotify credential can leak. It is escalated
 as soon as found by `pilote arbitrer` on the review slice, with its fix
 proposed: the owner decides. A fix he accepts is the one exception to AD-1 and
-is recorded as applied in `docs/quality/recommendations.md`.
+is recorded as applied in `docs/quality/security-review.md` by the review slice,
+and carried into `docs/quality/recommendations.md` by the recommendations slice
+(the file's only owner).
 
 ### AD-7 — No deployment, release rule kept
 
@@ -97,7 +99,10 @@ public), and one class: *fixed without behaviour change*, *recommendation*
 *critical* (AD-6). A critical finding stops the task: it is written in the
 report with its proposed fix, escalated by `pilote arbitrer` on this slice, and
 the slice stays open until the owner answers; his answer is written in the
-report. An accepted fix is applied under a test that fails without it; a
+report. The task stops after escalating; the pod that resumes it reads the
+answer in the slice's discussion and copies it into the report before going on.
+The report also cites, for each sensitive module it reads, its measured coverage
+in `docs/quality/coverage.md`. An accepted fix is applied under a test that fails without it; a
 refusal reclassifies the finding as a recommendation. Where a threat family has
 no finding, the row says what was checked. Two tasks, chained because the
 report has one owner: identity (accounts, permissions, ESP/RFID) then
