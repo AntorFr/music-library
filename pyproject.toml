@@ -1,6 +1,6 @@
 [project]
 name = "music-library"
-version = "0.26.0"
+version = "0.27.0"
 description = "Family media library manager with Home Assistant & Music Assistant integration"
 requires-python = ">=3.12,<4"
 dependencies = [
@@ -28,6 +28,7 @@ dev = [
     "pytest-asyncio>=0.24",
     "httpx",  # for TestClient
     "ruff>=0.9",
+    "pytest-cov>=6.0",
 ]
 
 [build-system]
@@ -40,6 +41,22 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+# Only E501, only tests: the net pins payloads and assertions on one line, and tests are not
+# rewritten for style (no assertion of tests/ is modified). Application code keeps line-length 100.
+"tests/**" = ["E501"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI declares dependencies and parameters as argument defaults (Depends(get_db),
+# Query(...), Form(...), Body(...)): that is the framework's idiom, not a mutable-default bug.
+# B008 stays on for every other call.
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.Form",
+    "fastapi.Body",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

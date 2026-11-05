@@ -14,10 +14,10 @@ Notes:
 
 from __future__ import annotations
 
+import unicodedata
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TypeVar
-import unicodedata
 
 from app.schemas.media import SelectionFallback, TagFilter, TagQueryGroup
 
@@ -105,7 +105,11 @@ def parse_tag_filters_from_qsl(
             ensure_order(category)
             include_values.setdefault(category, set()).update(values)
 
-    return ParsedTagFilters(include_values=include_values, exclude_values=exclude_values, include_order=include_order)
+    return ParsedTagFilters(
+        include_values=include_values,
+        exclude_values=exclude_values,
+        include_order=include_order,
+    )
 
 
 def build_simple_group(
@@ -158,7 +162,7 @@ def evaluate_group(item_tags: Mapping[str, set[str]], group: TagQueryGroup) -> b
     return True
 
 
-def apply_fallback(
+def apply_fallback(  # noqa: UP047 — the module-level TypeVar T is shared with other helpers; PEP 695 syntax is outside this tranche
     *,
     items: Sequence[T],
     item_tags: Sequence[Mapping[str, set[str]]],
@@ -235,10 +239,7 @@ def apply_fallback(
         def passes_exclusion_force(i: int) -> bool:
             if not passes_strict(i):
                 return False
-            for flt in group.none_of:
-                if _matches_filter(item_tags[i], flt):
-                    return False
-            return True
+            return all(not _matches_filter(item_tags[i], flt) for flt in group.none_of)
 
         ordered_filters_force = []
         by_cat_force = {f.category: f for f in group.all_of}
@@ -292,10 +293,7 @@ def apply_fallback(
         if not passes_strict(i):
             return False
         # exclusion clauses only
-        for flt in group.none_of:
-            if _matches_filter(item_tags[i], flt):
-                return False
-        return True
+        return all(not _matches_filter(item_tags[i], flt) for flt in group.none_of)
 
     # candidates matching at least one desired tag
     candidates: list[int] = []

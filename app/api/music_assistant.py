@@ -78,7 +78,7 @@ async def ma_get_item(
     try:
         item = await ma.get_item_by_uri(uri)
     except Exception as exc:
-        raise HTTPException(400, detail=f"Impossible de récupérer l'élément: {exc}")
+        raise HTTPException(400, detail=f"Impossible de récupérer l'élément: {exc}") from exc
 
     data = item.to_dict()
     data["thumb_url_resolved"] = ma.get_item_image_url(item, size=300)
@@ -208,7 +208,10 @@ async def ma_play(
     radio_mode: bool = False,
     seek: int | None = Query(
         None,
-        description="Position en secondes — saute à cet offset après le démarrage (ex: début de chapitre).",
+        description=(
+            "Position en secondes — saute à cet offset après le démarrage "
+            "(ex: début de chapitre)."
+        ),
     ),
     ma: MusicAssistantClient = Depends(get_ma_client),
 ):
@@ -226,7 +229,7 @@ async def ma_play(
                 import logging
                 logging.getLogger(__name__).warning("Seek failed: %s", exc)
     except Exception as exc:
-        raise HTTPException(500, detail=f"Erreur de lecture: {exc}")
+        raise HTTPException(500, detail=f"Erreur de lecture: {exc}") from exc
     return {"status": "ok", "queue_id": queue_id, "uri": uri, "seek": seek}
 
 

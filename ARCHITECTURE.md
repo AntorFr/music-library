@@ -82,7 +82,9 @@ applies to any tag cut.
 
 Three documents under `docs/quality/`: `coverage.md` (per-module coverage,
 refreshed by the net slice; also lists the doubtful behaviours kept as they are), `security-review.md` (B-4), `recommendations.md`
-(B-7). No other location.
+(B-7). No other location, with one transient exception: the net slice's test tasks leave
+fragments `docs/quality/douteux/<task>.md`, which its coverage task merges into `coverage.md`
+and deletes (none remains once the slice is done).
 
 ### AD-securite-1 — Security review: threat table first, one classified finding per row
 
@@ -113,8 +115,70 @@ holding criticals to the end (AD-6); fixing non-critical findings in passing
 
 ## Known gaps (inputs of the pass)
 
-No README, no ADR directory; no CI runs the tests (the only workflow builds the
-image); 14 test files (2514 lines) exist but coverage is unmeasured (122 tests pass on main at v0.26.0, measured by Skippy,
-2026-11-05; `ruff check` reports 148 errors then); `views.py` (1179 lines) and `music_assistant.py` (990)
+No README, no ADR directory; the 14 original test files (122 tests) are now completed by the
+net slice (67 % line coverage, per module in `docs/quality/coverage.md`); `ruff check` is clean
+(lint slice) and `.github/workflows/ci.yml` runs `ruff check .` and `pytest` on every pull
+request to `main` (the first run on a PR confirms it on the forge); `views.py` (1179 lines) and `music_assistant.py` (990)
 dominate; `docs/PLAN.md` is a six-phase plan from before v0.1; `TODO.md` holds
 backlog items to move to the recommendations.
+
+### AD-lint-ci-1 — Lint fixes: safe fixes only, one ignore per reason, CI last
+
+Applies to the `music-library-qualite-lint-ci` slice (extends AD-4).
+
+- **Count first.** The task re-runs `ruff check` at its start (148 errors at
+  v0.26.0; 169 at the start of the task on ruff 0.17.3, the net having added tests) and records the count in its
+  commit message.
+- **Order.** `ruff check --fix` (safe fixes only, never `--unsafe-fixes`), then the
+  rest by hand, file by file. A fix that could change behaviour (changing an
+  exception chain with `raise ... from`, merging branches, reordering imports with
+  side effects) is made only if a test of the net covers the code; otherwise it is
+  ignored with a per-line `# noqa: <code> — <reason>` or, for a file-wide case, a
+  `per-file-ignores` entry with a comment. The rule set `E, F, I, UP, B, SIM` and
+  `line-length = 100` are never loosened; no rule family is removed.
+- **Behaviour check.** The full suite (the 122 existing tests and the net) runs
+  green after the autofix and again at the end; no test file is modified except
+  for lint fixes in it, and no assertion changes.
+- **CI after green.** `ci.yml` is written only once `ruff check` is clean on the
+  slice branch, so the first PR that runs it is green. One job, Python 3.12
+  (`requires-python >=3.12`; the image's version is the reference), `pip install
+  -e '.[dev]'`, then `ruff check .` and `pytest` as separate steps, triggered by
+  `pull_request` to `main`. No `continue-on-error`, no `|| true`. Actions pinned by
+  major tag (AD-4).
+- **Untouched.** `docker-publish.yml`, `version` in `pyproject.toml`, `app_version`
+  in `app/config.py` (AD-7).
+*Rejected:* `ruff format` (would rewrite every file, outside B-6); adding mypy or
+widening the rule set (recommendations); a matrix of Python versions (the image
+fixes one).
+
+## Net slice (`music-library-qualite-filet`)
+
+### AD-filet-1 — Test conventions of the net
+
+New tests live in `tests/`, one file per domain, in the style of `tests/test_nav_v2.py`:
+a temporary SQLite file engine, `Base.metadata.create_all`, `seed_default_tags`,
+`get_db` overridden, `httpx.AsyncClient` on `ASGITransport(app)`. Music Assistant is
+always behind a stub (no network); the real `app.main.app` is used, no private
+import of a service is tested (AD-2). Existing test files are not edited. A test
+pins what the code does at v0.26.0; a doubtful behaviour is pinned as is and
+listed in `docs/quality/coverage.md` under « Comportements douteux conservés »
+(test, finding, origin). Each test task writes its doubtful findings in its own fragment
+`docs/quality/douteux/<task>.md`; the coverage task merges them into `coverage.md` and deletes them.
+
+Startup tests: `init_db` uses the module-global `app.database.engine`, so a startup test
+replaces `engine` and `async_session` with ones on the sample database through
+`monkeypatch.setattr` on `app.database` only (`app.main` has no module-level `engine`
+or `async_session`: it imports `init_db` and, inside the lifespan, `async_session` from
+`app.database`, so the patch is seen), and stubs Music Assistant before the lifespan runs.
+
+### AD-filet-2 — The schema evolves in `init_db`, not in Alembic
+
+The repository holds no Alembic migration: `alembic` is a dependency, but the
+schema is created by `create_all` and upgraded by the one hand-written step of
+`app/database.py::init_db` (`tag_categories.color`). The net's « startup and
+migrations » domain therefore pins `init_db` and the app lifespan on a sample
+database in the previous schema (a `tag_categories` without `color`), and on an
+empty one. The absence of Alembic migrations is listed in « Comportements
+douteux conservés » as a finding for the recommendations slice. (AD-5 above says
+« Alembic migrations are not rewritten »: there are none; the rule stands for
+any that appear.)

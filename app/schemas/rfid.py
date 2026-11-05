@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-
 RFID_UID_PATTERN = r"^[0-9A-Fa-f]{2}(-[0-9A-Fa-f]{2}){3,}$"
 
 
