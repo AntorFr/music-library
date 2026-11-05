@@ -82,6 +82,42 @@ Three documents under `docs/quality/`: `coverage.md` (per-module coverage,
 refreshed by the net slice; also lists the doubtful behaviours kept as they are), `security-review.md` (B-4), `recommendations.md`
 (B-7). No other location.
 
+### AD-reco-1 — The recommendations: one entry shape, closed sources, checked by script
+
+`docs/quality/recommendations.md` is written last, from the finished documents,
+and decides nothing: the owner arbitrates (P-2). It opens with a "How to read"
+paragraph, a summary table (id, title, origin, recommendation, status), then
+entries grouped by theme in this order: security, behaviour kept as found,
+tooling and CI, documentation gaps, new functions. Within a theme, the entry the
+owner should look at first comes first. A final section "Applied" holds the
+critical fixes accepted under AD-6.
+
+Each entry is `### R-n — title` with five fields: **Origin** (file and entry it
+comes from), **Today** (the observable behaviour), **Options** (at least two,
+"leave as is" being one), **Recommendation** (one option and why), **Status**
+(`open`, or `applied` with the commit of the fix).
+
+Closed list of sources, each swept in full so nothing is silently dropped:
+the two sections "Doubtful behaviours kept" and "Modules kept" of
+`docs/quality/coverage.md`; every non-critical finding of
+`docs/quality/security-review.md` and every critical fix applied; the open
+entries of `TODO.md`; pinning the Actions by SHA and a type checker (mypy),
+named by AD-4 and the lint/CI slice; the known gaps between the historical
+documents and the code listed by the doc slice. An entry may point to the
+source (`see security-review.md, T-4`) instead of restating it, but it still
+carries options and a recommendation.
+*Rejected:* listing improvements from memory or from reading `app/` anew — the
+sources are the record of what the pass saw, and a sweep by script proves none is missing.
+
+### AD-reco-2 — `TODO.md` is emptied once, into the recommendations
+
+The open entries of `TODO.md` (fuzzy search API, mobile quick launcher) become
+"new functions" entries of the recommendations, each with its bullet points
+kept as the description, never as scope. `TODO.md` then keeps its title, its
+intro line and its `## Livré` heading with no `###` entry under `## En attente`
+and a one-line pointer to `docs/quality/recommendations.md`.
+*Rejected:* leaving them in both places — two backlogs drift apart.
+
 ## Known gaps (inputs of the pass)
 
 No README, no ADR directory; no CI runs the tests (the only workflow builds the
