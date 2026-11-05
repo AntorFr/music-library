@@ -98,7 +98,7 @@ comes from), **Today** (the observable behaviour), **Options** (at least two,
 (`open`, or `applied` with the commit of the fix).
 
 Closed list of sources, each swept in full so nothing is silently dropped:
-the two sections "Doubtful behaviours kept" and "Modules kept" of
+the two sections "Comportements douteux conservés" and "Modules conservés" of
 `docs/quality/coverage.md`; every non-critical finding of
 `docs/quality/security-review.md` and every critical fix applied; the open
 entries of `TODO.md`; pinning the Actions by SHA and a type checker (mypy),
