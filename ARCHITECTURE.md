@@ -82,6 +82,30 @@ Three documents under `docs/quality/`: `coverage.md` (per-module coverage,
 refreshed by the net slice; also lists the doubtful behaviours kept as they are), `security-review.md` (B-4), `recommendations.md`
 (B-7). No other location.
 
+### AD-securite-1 — Security review: threat table first, one classified finding per row
+
+The report `docs/quality/security-review.md` opens with a threat table, written
+before reading the code in depth: for each threat family (owner-tag accounts
+and permissions; Spotify accounts; ESP/RFID API and machine-caller token; HTTP
+inputs — uploads, covers, templates; outbound calls to Music Assistant; logs)
+it names who attacks, through which entry point (a route, a header, a claim, a
+file), and what is at stake. Each row then points to the code read and ends in
+findings. A finding carries: an identifier `S-n`, the threat, the evidence
+(file and route, never a real secret or identifier — the repository is
+public), and one class: *fixed without behaviour change*, *recommendation*
+(B-7, AD-1: a hardening that rejects an input accepted today is one), or
+*critical* (AD-6). A critical finding stops the task: it is written in the
+report with its proposed fix, escalated by `pilote arbitrer` on this slice, and
+the slice stays open until the owner answers; his answer is written in the
+report. An accepted fix is applied under a test that fails without it; a
+refusal reclassifies the finding as a recommendation. Where a threat family has
+no finding, the row says what was checked. Two tasks, chained because the
+report has one owner: identity (accounts, permissions, ESP/RFID) then
+surfaces (Spotify, inputs, outbound calls, logs).
+*Rejected:* a review by file (it hides what no file owns, e.g. a missing check);
+holding criticals to the end (AD-6); fixing non-critical findings in passing
+(AD-1).
+
 ## Known gaps (inputs of the pass)
 
 No README, no ADR directory; no CI runs the tests (the only workflow builds the
