@@ -82,6 +82,24 @@ Three documents under `docs/quality/`: `coverage.md` (per-module coverage,
 refreshed by the net slice; also lists the doubtful behaviours kept as they are), `security-review.md` (B-4), `recommendations.md`
 (B-7). No other location.
 
+### AD-refactoring-1 — Cut by responsibility, keep every import path and patch target
+
+A split keeps the old module as the public face: the names callers import
+(`from app.services.music_assistant import MusicAssistantClient, get_ma_client,
+resolve_ma_provider_and_id`; `from app.services import media_service`; the
+`router` of `app.api.views`) still resolve there, by re-export or because they
+stay in place. `get_ma_client` and `close_ma_client` stay *defined* in
+`app/services/music_assistant.py`: tests patch
+`app.services.music_assistant.get_ma_client`. New files only hold what moved.
+`app/api/views.py` becomes the package `app/api/views/` (`__init__.py` exposes
+the same `router`); route paths, methods and registration order are unchanged.
+Before each cut the task records the line count and the net test that covers
+the module; a module with no such test is not touched and is listed under
+"Modules conservés" in `docs/quality/coverage.md`.
+*Rejected:* renaming public functions to fit the new layout (callers and patch
+targets move); moving `get_ma_client` with the client class (breaks the
+existing monkeypatches).
+
 ## Known gaps (inputs of the pass)
 
 No README, no ADR directory; no CI runs the tests (the only workflow builds the
