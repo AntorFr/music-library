@@ -168,7 +168,9 @@ async def _audiobook_children(ma: MusicAssistantClient, item) -> list[QuickChild
     ]
 
 
-def _children_page(item, all_items: list[QuickChildItem], offset: int, limit: int) -> QuickChildrenResponse:
+def _children_page(
+    item, all_items: list[QuickChildItem], offset: int, limit: int
+) -> QuickChildrenResponse:
     page = all_items[offset : offset + limit]
     return QuickChildrenResponse(
         parent_id=item.id,

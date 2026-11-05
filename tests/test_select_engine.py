@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import pytest
-
 from app.schemas.media import SelectionFallback, TagFilter, TagQueryGroup
 from app.services.select_engine import (
     apply_fallback,
