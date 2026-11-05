@@ -4,10 +4,9 @@ Media CRUD service — business logic for managing the local catalogue.
 
 from __future__ import annotations
 
-import uuid
 import random
+import uuid
 from collections.abc import Collection
-from typing import Any
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,8 +24,7 @@ from app.schemas.media import (
 from app.services import cover_service
 from app.services.auth_service import normalize_owner
 from app.services.permissions import OWNER_CATEGORY
-from app.services.select_engine import apply_fallback, evaluate_group
-from app.services.select_engine import normalize_select_token
+from app.services.select_engine import apply_fallback, evaluate_group, normalize_select_token
 
 
 class DuplicateMediaError(RuntimeError):
@@ -195,7 +193,9 @@ async def create_media(
 
         # Ensure we have a cached cover if we can
         if existing.cover_url and not existing.cover_local:
-            local_path = await cover_service.download_and_save_cover(existing.id, existing.cover_url)
+            local_path = await cover_service.download_and_save_cover(
+                existing.id, existing.cover_url
+            )
             if local_path:
                 existing.cover_local = local_path
 
@@ -388,7 +388,9 @@ async def delete_media(db: AsyncSession, media_id: str, hard: bool = False) -> b
 # Tag management (add/remove on a media item)
 # ---------------------------------------------------------------------------
 
-async def add_tag_to_media(db: AsyncSession, media_id: str, category: str, value: str) -> Media | None:
+async def add_tag_to_media(
+    db: AsyncSession, media_id: str, category: str, value: str
+) -> Media | None:
     """Add a tag to a media item. Returns the updated media or None."""
     media = await get_media(db, media_id)
     if not media:

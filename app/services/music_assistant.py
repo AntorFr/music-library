@@ -13,6 +13,7 @@ Uses the MA WebSocket API (same protocol as the official client).
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import urllib.parse
 import uuid
@@ -350,7 +351,11 @@ class MusicAssistantClient:
 
     @property
     def connected(self) -> bool:
-        return self._ws is not None and self._reader_task is not None and not self._reader_task.done()
+        return (
+            self._ws is not None
+            and self._reader_task is not None
+            and not self._reader_task.done()
+        )
 
     # --- Background reader ---
 
@@ -428,7 +433,9 @@ class MusicAssistantClient:
             # First message from server is ServerInfoMessage
             import json
             raw = await self._ws.recv()
-            self._server_info = json.loads(raw) if isinstance(raw, str) else json.loads(raw.decode())
+            self._server_info = (
+                json.loads(raw) if isinstance(raw, str) else json.loads(raw.decode())
+            )
             logger.info(
                 "Connected to MA server v%s (schema %s)",
                 self._server_info.get("server_version"),
@@ -448,7 +455,11 @@ class MusicAssistantClient:
                 # Read until auth response
                 while True:
                     raw_resp = await asyncio.wait_for(self._ws.recv(), timeout=10.0)
-                    resp = json.loads(raw_resp) if isinstance(raw_resp, str) else json.loads(raw_resp.decode())
+                    resp = (
+                        json.loads(raw_resp)
+                        if isinstance(raw_resp, str)
+                        else json.loads(raw_resp.decode())
+                    )
                     if resp.get("event"):
                         continue
                     if resp.get("message_id") == message_id:
@@ -473,10 +484,8 @@ class MusicAssistantClient:
         """Close the WebSocket connection."""
         if self._reader_task and not self._reader_task.done():
             self._reader_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._reader_task
-            except asyncio.CancelledError:
-                pass
         self._reader_task = None
         if self._ws:
             await self._ws.close()
@@ -517,10 +526,10 @@ class MusicAssistantClient:
 
         try:
             response = await asyncio.wait_for(fut, timeout=60.0)
-        except asyncio.TimeoutError:
+        except TimeoutError as exc:
             self._pending.pop(message_id, None)
             self._partial_results.pop(message_id, None)
-            raise TimeoutError(f"MA command '{command}' timed out after 60s")
+            raise TimeoutError(f"MA command '{command}' timed out after 60s") from exc
 
         if "error_code" in response:
             error_msg = response.get("details", response.get("error_code", "Unknown error"))
