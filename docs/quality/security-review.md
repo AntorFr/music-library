@@ -151,6 +151,175 @@ Not a security exposure; listed because it rejects an input in a way that change
 
 (S-1 also belongs to this row: the RFID read routes are where the child scope is missing.)
 
-## 4. Rows for the surfaces pass
+## 4. Row — Spotify accounts (surfaces pass)
 
-Rows 2, 4, 5 and 6 are completed by the next task (`music-library-qualite-securite-surfaces`).
+**Read:** `app/services/spotify_accounts.py`, the pin routes of `app/api/views.py`
+(`/media/<media_id>/spotify-account`, GET and POST), `components/spotify_account.html`, the Spotify
+parts of `app/services/media_service.py`.
+**Coverage of the modules read** (`docs/quality/coverage.md`): `spotify_accounts.py` 89 %,
+`media_service.py` 51 %, `app/api/views.py` 43 % (the pin fragment is among the pinned pages).
+
+**Verified without finding:**
+- The application stores no Spotify login, password or token: accounts live in Music Assistant. What the
+  app holds is the MA *instance id* (`spotify--<id>`), written into `source_uri` — an identifier of an
+  account slot, not a credential. `list_accounts` copies only `instance_id`, `name`, `status`,
+  `last_error`; nothing else of the provider config (which may hold secrets) is read.
+- Both pin routes call `ensure_parent`; a child gets 403 on GET and POST. The posted `account` must be
+  one of the instance ids MA lists, usable, and must return content before anything is written, so a
+  caller cannot pin a media to an arbitrary scheme or URI.
+- Instance ids and account names reach the page through Jinja autoescape (`<option value>`, text);
+  no `|safe` anywhere in `app/templates`.
+- `source_uri` and `metadata_extra` returned by `/api/v1/media` carry the instance id only.
+
+**S-13 below (critical) also touches this row** through `source_uri`.
+
+### Findings
+
+**S-14 — recommendation — MA `last_error` text is relayed to the parent's pages.** `list_accounts` shows MA's `last_error` message and `_ma_status` lists
+`broken_providers[].error` verbatim; `str(exc)` of any MA failure is shown to the parent
+(`Music Assistant : <exc>`). MA error texts may name hosts or accounts. Both views are parent-only, so
+no leak across roles; filtering them would change what the parent sees → recommendation.
+
+## 5. Row — HTTP inputs: uploads, covers, templates (surfaces pass)
+
+**Read:** `app/api/covers.py`, `app/services/cover_service.py`, `app/api/quick.py` (`/thumb`),
+`app/schemas/media.py` (field bounds), every Jinja template for `|safe`, inline handlers and script
+blocks, the path/query parameters of `app/api/*.py`.
+**Coverage of the modules read:** `covers.py` 62 %, `cover_service.py` 65 %, `quick.py` 85 %,
+`schemas/media.py` 96 %, `views.py` 43 % (templates are exercised only through pinned pages).
+
+**Verified without finding:**
+- Cover files are named `<media_id>.jpg` inside `covers_dir`; `media_id` is a single path segment
+  (`/covers/..%2F..%2Fetc%2Fpasswd.jpg` answers 404, no traversal) and an embedded NUL byte answers
+  the default cover, not an error. Uploaded bytes are never written as received: Pillow decodes,
+  converts to RGB, resizes to a square and re-encodes as JPEG, so a non-image or a polyglot file is
+  refused (500 "Erreur lors du traitement", pinned) and nothing executable is stored.
+- The upload route needs a media the user may edit (`ensure_media_edit`), the media must exist.
+- `size` is bounded 16–512 and `fmt` is `jpg|bmp` by pattern, so the resized-variant cache is
+  bounded; the thumbnail cache has an LRU cap (`_enforce_thumb_cache_limit`).
+- `/api/v1/quick/thumb` fetches only URLs carrying an HMAC issued by the server (SSRF guarded), key
+  random per process if `thumb_signing_key` is empty; comparison is constant time (but see S-12).
+- Jinja autoescape is on for every `.html` template; no `|safe`, no `Markup`. `tojson` is used for JSON
+  blocks and for `hx-vals`; inline handlers that read titles use `data-*` attributes.
+- Decompression bombs: Pillow's `MAX_IMAGE_PIXELS` raises past ~179 Mpx and the error is caught.
+
+### Findings
+
+**S-12 — fixed — a non-ASCII `sig` on `/api/v1/quick/thumb` gave an unauthenticated 500.**
+`verify_thumb` passed `str` to `hmac.compare_digest`, which raises `TypeError` on non-ASCII text.
+The route is reachable with no session on the ESP port (and with any session on the main port). No
+bypass: the exception ends the request. Fix: compare UTF-8 bytes (`app/services/cover_service.py`).
+Every signature accepted before is accepted now; the crafted one answers 403 like any wrong signature.
+Test to add (tester): `sig=é` answers 403, and 500 without the fix.
+**Applied:** yes.
+
+**S-13 — critical — a child's media title or source URI runs script in a parent's browser.**
+Threat: a child session (author of a media title / `source_uri`, both free text) against a parent who
+browses or plays it — the parent's session then acts with parent rights (AD-6: a child writes another
+owner's media, and escalates to parent routes: tags, settings, hard delete, RFID, Spotify pin).
+Evidence (two sinks, same cause — author text reaches a JavaScript context that Jinja autoescape does
+not protect):
+1. `app/templates/base.html` `showToast` assigns `toast.innerHTML = '…' + message`; callers pass
+   media text: `listen/index.html` `playQuickMedia` (`Lecture lancée : ${title}`, title is the media
+   title read from `data-title`), `ma/browse.html` (`data.title`), and server error text
+   (`err.detail`). A title such as an `<img onerror=…>` element executes when a parent presses play.
+2. `onclick="playChapter('{{ audiobook_uri }}', …)"` (`components/audiobook_chapters.html`),
+   `playEpisode('{{ ep.uri }}')` (`podcast_episodes.html`), `importItem('{{ item.uri }}')`
+   (`ma_items.html`, `ma_search_results.html`): the browser decodes the attribute before running it,
+   and Jinja writes a quote as `&#39;`, so a value containing a quote ends the JS string. Rendering
+   `audiobook_chapters.html` with `audiobook_uri = a');alert(1);//` gives
+   `onclick="playChapter('a&#39;);alert(1);//', 0, true)"` — script. `audiobook_uri` falls back to the
+   media's `source_uri` (`views.py`, audiobook chapters) when MA does not answer; `source_uri` is
+   free text up to 512 characters that a child sets on their own media. `ep.uri` and `item.uri` come
+   from MA/provider content (third-party text).
+3. Not exploitable but same family: `media/detail.html` `const uri = '{{ item.source_uri }}'` — a quote
+   becomes `&#39;` and stays inert inside a script, so it breaks the page, not the session.
+No exposure without a session (child accounts exist only with OIDC on); in dev mode everyone is a parent.
+Proposed fix (to be accepted by the owner): (a) `showToast` builds the icon and sets the message with
+`textContent` (HTML in a toast is never intended: every caller passes plain text); (b) the four inline
+handlers read their argument from a `data-uri` attribute (`this.dataset.uri`), as `listen/index.html`
+already does for titles; (c) `detail.html` uses `{{ item.source_uri | tojson }}`. Legitimate values
+render and behave exactly as today; only values with quotes or markup, which were broken or hostile,
+change. No input is rejected.
+Test that must fail without it: render the audiobook-chapters fragment for a media whose `source_uri`
+holds a quote and markup, with the MA stub failing, and assert no `playChapter('…&#39;` string
+break in the response (the value is in a `data-uri` attribute); assert `base.html` sets toast text with
+`textContent` rather than `innerHTML`.
+**Owner's answer:** pending (escalated by `pilote arbitrer`).
+**Applied:** not yet.
+
+**S-15 — recommendation — a media's `cover_url` makes the server fetch any URL.**
+`download_and_save_cover` fetches `cover_url` (up to 1024 characters, set by any user who can create or
+edit a media) with `follow_redirects=True`, no scheme or host filter, from `POST/PUT /api/v1/media`
+and the self-healing path of `GET /covers/<media_id>.jpg` (no session). A child can make the server
+request an internal address (blind SSRF: the response is kept only if it decodes as an image, and
+errors are logged, not returned). Restricting schemes or private ranges rejects URLs accepted today
+→ recommendation.
+
+**S-16 — recommendation — no size limit on uploads or downloaded covers.**
+`upload_cover` reads the whole file into memory (`await file.read()`) and `httpx` reads the whole
+cover response. A signed-in user can exhaust memory; a limit would reject uploads accepted today.
+
+**S-17 — recommendation — thumbnails of remote images are resized by a third party.**
+`MusicAssistantClient.get_image_url` builds `https://images.weserv.nl/?url=<image url>` for resized
+remote images and the page hands that URL to browsers (outside the signed proxy used for the ESP): the
+image URL is disclosed to that service. Changing it alters rendered covers → recommendation.
+
+## 6. Row — Outbound calls to Music Assistant (surfaces pass)
+
+**Read:** `app/services/music_assistant.py` (connection, auth handshake, command timeouts, image URLs,
+image download), `app/api/music_assistant.py`, `app/api/quick.py` error paths, `app/api/system.py`.
+**Coverage of the modules read:** `music_assistant.py` 51 % (network internals stubbed in every test,
+see `docs/quality/coverage.md`), `api/music_assistant.py` 99 %, `api/quick.py` 85 %, `api/system.py` 100 %.
+
+**Verified without finding:**
+- The target is only `settings.music_assistant_url` (operator-set); no caller-supplied host reaches the
+  websocket. Callers steer a MA *URI* or id, which is sent as a command argument, not as a URL.
+- The token (`settings.music_assistant_token`) is sent once, in the `auth` command after the
+  handshake, never in the URL, never returned by an API (`/health/ma` shows the URL, schema and
+  version only) and never logged.
+- Timeouts exist: 10 s for the auth reply, 60 s per command, 15 s for image downloads, and the
+  websocket open uses the library's default open timeout.
+- A failed authentication raises a constant message ("Music Assistant authentication failed").
+- `GET /api/v1/health/ma` needs a session (only `/api/v1/health` is exempt).
+
+### Findings
+
+**S-18 — recommendation — MA exception text is relayed to callers.**
+`/api/v1/ma/*` answers `HTTPException(400/500/503, detail=f"… {exc}")` (and `quick.py` 502 and its stream
+error) with the raw exception text, shown by the front end in toasts (see S-13, which neutralises the
+markup). It can contain the MA host or internal error wording; it never contains the token (the token is
+only in the sent message). Trimming the messages changes what clients display → recommendation.
+
+**S-19 — recommendation — plaintext transport when the URL is `http://`.**
+The websocket is `ws://` for an `http://` URL, so the token travels in clear on the network between the
+app and MA. That is the documented deployment (internal network); a `wss://` requirement would reject
+the configuration accepted today.
+
+## 7. Row — Logs (surfaces pass)
+
+**Read:** every `logging` call under `app/` (about 40: `main`, `auth`, `views`, `cover_service`,
+`music_assistant`, `api/music_assistant`), `logging.basicConfig` in `app/main.py`.
+**Coverage of the modules read:** `main.py` 98 %, `api/auth.py` 100 %, `cover_service.py` 65 %,
+`music_assistant.py` 51 %, `views.py` 43 %.
+
+**Verified without finding:**
+- No log call receives a Spotify credential, the MA token, `api_token`, `session_secret`,
+  `oidc_client_secret` or the thumbnail signing key (all checked by name, none appear as arguments).
+- The OIDC callback logs claim *names* and the error code, and `OIDC login: <username> (role)` — the
+  username only; no token, no claim values.
+- Media events log the media id, not the title or the URI. `DEBUG` (setting `debug`) only lowers the
+  level; no payload dump was added.
+- Error bodies: no stack trace is returned (FastAPI default 500 body is a constant string).
+
+### Findings
+
+**S-20 — recommendation — URLs are logged on image failures and at MA connect.**
+`cover_service` logs `cover_url` / thumbnail `src_url` on failure and `music_assistant` logs
+`ws_url` ("Connecting to Music Assistant at …") and the image URL on failed download. A configured MA
+URL with credentials in it (`http://user:pass@host`) or a provider image URL with a signed query would be
+written to the log. The repository's own documentation uses a plain host; redacting the userinfo and
+query changes log content only → recommendation.
+
+**S-21 — recommendation — the username is logged at each login.**
+`OIDC login: <username>` is intended for operations; noted for operators who treat logs as shared.
