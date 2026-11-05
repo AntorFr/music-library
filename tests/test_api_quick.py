@@ -189,3 +189,19 @@ async def test_children_ma_failure_is_a_502_naming_music_assistant(client, db, k
 async def test_children_reject_bad_paging(client, db, q):
     item = await _create(db, title="X", uri="spotify://podcast/1", media_type=MediaType.podcast)
     assert (await client.get(f"/api/v1/quick/item/{item.id}/children?{q}")).status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_children_of_a_media_without_episodes_is_a_400(client, db):
+    """Fails if the 400 guard on non podcast / audiobook media is removed or its code changed."""
+    item = await _create(db, title="Liste", uri="spotify://playlist/1", media_type=MediaType.playlist)
+    r = await client.get(f"/api/v1/quick/item/{item.id}/children")
+    assert r.status_code == 400
+    assert r.json() == {"detail": "Ce média n'a pas d'épisodes/chapitres"}
+
+
+@pytest.mark.asyncio
+async def test_children_of_an_unknown_media_is_404(client):
+    r = await client.get("/api/v1/quick/item/999999/children")
+    assert r.status_code == 404
+    assert r.json() == {"detail": "Média introuvable"}

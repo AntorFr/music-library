@@ -161,6 +161,24 @@ async def test_media_with_several_owner_tags_is_seen_by_any_of_them(client, db, 
 
 
 @pytest.mark.asyncio
+async def test_non_owner_tag_carrying_the_childs_name_does_not_grant_access(client, db, oidc_on):
+    """Only tags of the `owner` category scope a child: a `genre` tag whose value equals the
+    child's name (or a group name) must not open the media. Fails if the category test is dropped."""
+    item, _ = await media_service.create_media(
+        db,
+        MediaCreate(
+            title="Faux propriétaire", media_type=MediaType.playlist, source_uri="spotify://x/faux",
+            provider="spotify",
+            tags_inline=[{"category": "genre", "value": "Léa"}, {"category": "genre", "value": "Famille"}],
+        ),
+    )
+    await db.commit()
+    _login(client, "lea", groups=["famille"])
+    assert _titles(await client.get("/api/v1/media")) == set()
+    assert (await client.get(f"/api/v1/media/{item.id}")).status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_untagged_media_is_hidden_from_a_child_and_visible_to_a_parent(client, db, oidc_on):
     orphan = await _media(db, "Orpheline")
     _login(client, "lea")
