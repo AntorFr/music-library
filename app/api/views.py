@@ -703,7 +703,7 @@ async def media_assign_rfid(
         await rfid_service.assign_rfid_tags_to_media(db, media_id=media_id, uids=rfid_uids)
         await db.commit()
     except rfid_service.RFIDAlreadyAssignedError as exc:
-        raise HTTPException(409, detail=f"Tag RFID déjà associé: {exc.uid}")
+        raise HTTPException(409, detail=f"Tag RFID déjà associé: {exc.uid}") from exc
 
     if request.headers.get("HX-Target") == "rfid-assigned":
         item = await media_service.get_media(db, media_id)
@@ -999,8 +999,8 @@ async def tags_category_create(
     from app.services.tag_service import upsert_tag_category
     try:
         await upsert_tag_category(db, slug, label, color=normalized_color)
-    except ValueError:
-        raise HTTPException(400, detail="Couleur invalide")
+    except ValueError as exc:
+        raise HTTPException(400, detail="Couleur invalide") from exc
     await db.commit()
     return RedirectResponse("/settings?tab=tags", status_code=303)
 
@@ -1089,7 +1089,10 @@ async def browse_search(request: Request, q: str = Query("", alias="maSearch")):
     category = request.query_params.get("category", "all")
 
     if not search_q or len(search_q) < 2:
-        return HTMLResponse('<div class="empty-state"><i class="mdi mdi-magnify"></i><p>Tapez au moins 2 caractères…</p></div>')
+        return HTMLResponse(
+            '<div class="empty-state"><i class="mdi mdi-magnify"></i>'
+            "<p>Tapez au moins 2 caractères…</p></div>"
+        )
 
     # Map tab categories to MA media_types
     CATEGORY_TO_MEDIA_TYPES: dict[str, list[str] | None] = {
@@ -1110,7 +1113,10 @@ async def browse_search(request: Request, q: str = Query("", alias="maSearch")):
 
         def serialize(items):
             # Sort: library items first, then by name
-            sorted_items = sorted(items, key=lambda i: (0 if i.uri.startswith("library://") else 1, i.name.lower()))
+            sorted_items = sorted(
+                items,
+                key=lambda i: (0 if i.uri.startswith("library://") else 1, i.name.lower()),
+            )
             out = []
             for item in sorted_items:
                 d = item.to_dict()
@@ -1150,7 +1156,10 @@ async def browse_search(request: Request, q: str = Query("", alias="maSearch")):
         has_results = any(items for _, _, items in groups)
     except Exception as e:
         logger.error("MA search error: %s", e)
-        return HTMLResponse(f'<div class="empty-state"><i class="mdi mdi-alert-circle"></i><p>Erreur Music Assistant: {e}</p></div>')
+        return HTMLResponse(
+            '<div class="empty-state"><i class="mdi mdi-alert-circle"></i>'
+            f"<p>Erreur Music Assistant: {e}</p></div>"
+        )
 
     return templates.TemplateResponse(request, "components/ma_search_results.html", _base_ctx(
         request, groups=groups, has_results=has_results,

@@ -5,9 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.database import Base
 from app.models import media as _media_models  # noqa: F401
+from app.models.media import MediaType
 from app.schemas.media import MediaCreate
 from app.services import media_service
-from app.models.media import MediaType
 
 
 @pytest.fixture

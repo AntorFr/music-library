@@ -49,9 +49,7 @@ def _is_blocked_admin_write(method: str, path: str) -> bool:
         return False
     if path == "/api/v1/ma/import":  # triggers a full library import
         return True
-    if path.startswith("/api/v1/media/") and path.endswith("/cover"):  # cover upload
-        return True
-    return False
+    return path.startswith("/api/v1/media/") and path.endswith("/cover")  # cover upload
 
 
 @esp_app.middleware("http")
