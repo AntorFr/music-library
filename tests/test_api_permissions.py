@@ -394,6 +394,16 @@ async def test_bad_bearer_headers_are_401(client, oidc_on, monkeypatch, header):
 
 
 @pytest.mark.asyncio
+async def test_non_ascii_bearer_is_401_not_500(client, oidc_on, monkeypatch):
+    """S-2: compare_digest raised TypeError on a non-ASCII str -> unauthenticated 500."""
+    monkeypatch.setattr(settings, "api_token", "s3cret")
+    r = await client.get(
+        "/api/v1/media", headers={"Authorization": "Bearer sécrét".encode()}
+    )
+    assert r.status_code == 401
+
+
+@pytest.mark.asyncio
 async def test_bearer_scheme_is_case_insensitive(client, oidc_on, monkeypatch):
     monkeypatch.setattr(settings, "api_token", "s3cret")
     r = await client.get("/api/v1/media", headers={"Authorization": "bEaReR s3cret"})
