@@ -198,7 +198,7 @@ async function playEpisode(uri) {
 
 async function playMedia() {
   const queueId = document.getElementById('playerSelect').value;
-  const uri = '{{ item.source_uri }}';
+  const uri = {{ item.source_uri | tojson }};
   try {
     const resp = await fetch(`/api/v1/ma/play?queue_id=${encodeURIComponent(queueId)}&uri=${encodeURIComponent(uri)}`, {method: 'POST'});
     if (resp.ok) {

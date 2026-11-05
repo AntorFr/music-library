@@ -24,7 +24,7 @@
       <span style="display:block;height:100%;width:{{ resume_pct }}%;background:var(--primary)"></span>
     </span>
     <span>{{ resume_pct }}%</span>
-    <button class="btn btn-surface btn-sm" onclick="playChapter('{{ audiobook_uri }}', 0, true)" title="Reprendre la lecture">
+    <button class="btn btn-surface btn-sm" data-uri="{{ audiobook_uri }}" onclick="playChapter(this.dataset.uri, 0, true)" title="Reprendre la lecture">
       <i class="mdi mdi-play"></i> Reprendre
     </button>
   </div>
@@ -67,7 +67,8 @@
         </div>
       </div>
       <button class="btn btn-primary btn-sm"
-              onclick="playChapter('{{ audiobook_uri }}', {{ ch.start|round|int }})"
+              data-uri="{{ audiobook_uri }}"
+              onclick="playChapter(this.dataset.uri, {{ ch.start|round|int }})"
               title="Lire à partir de ce chapitre">
         <i class="mdi mdi-play"></i>
       </button>

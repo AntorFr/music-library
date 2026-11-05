@@ -144,7 +144,10 @@
       toast.className = `toast toast-${type}`;
       const icon = type === 'success' ? 'check-circle' :
                    type === 'error' ? 'alert-circle' : 'information';
-      toast.innerHTML = `<i class="mdi mdi-${icon}"></i> ${message}`;
+      const iconEl = document.createElement('i');
+      iconEl.className = `mdi mdi-${icon}`;
+      toast.appendChild(iconEl);
+      toast.appendChild(document.createTextNode(' ' + message));
       container.appendChild(toast);
       setTimeout(() => {
         toast.style.opacity = '0';

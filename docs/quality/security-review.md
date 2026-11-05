@@ -245,8 +245,8 @@ Test that must fail without it: render the audiobook-chapters fragment for a med
 holds a quote and markup, with the MA stub failing, and assert no `playChapter('…&#39;` string
 break in the response (the value is in a `data-uri` attribute); assert `base.html` sets toast text with
 `textContent` rather than `innerHTML`.
-**Owner's answer:** pending (escalated by `pilote arbitrer`).
-**Applied:** not yet.
+**Owner's answer:** accepted (Monsieur, 2026-11-06).
+**Applied:** Applied — (a) `showToast` builds the icon element and a text node; (b) `data-uri` + `this.dataset.uri` in `audiobook_chapters.html` (2 buttons), `podcast_episodes.html`, `ma_items.html`, `ma_search_results.html`; (c) `detail.html` uses `source_uri | tojson`.
 
 **S-15 — recommendation — a media's `cover_url` makes the server fetch any URL.**
 `download_and_save_cover` fetches `cover_url` (up to 1024 characters, set by any user who can create or
