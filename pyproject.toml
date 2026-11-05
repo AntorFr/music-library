@@ -1,6 +1,6 @@
 [project]
 name = "music-library"
-version = "0.26.0"
+version = "0.27.0"
 description = "Family media library manager with Home Assistant & Music Assistant integration"
 requires-python = ">=3.12,<4"
 dependencies = [
@@ -28,6 +28,7 @@ dev = [
     "pytest-asyncio>=0.24",
     "httpx",  # for TestClient
     "ruff>=0.9",
+    "pytest-cov>=6.0",
 ]
 
 [build-system]
