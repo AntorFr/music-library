@@ -16,7 +16,7 @@ from fastapi import APIRouter
 from app.api.views import browse, listen, media, media_items, settings
 from app.api.views.shared import OWNER_COOKIE, templates
 
-router = APIRouter(tags=["frontend"])
+router = APIRouter()  # le tag "frontend" vient des sous-routeurs (un seul, pas de cumul)
 router.include_router(listen.router)
 router.include_router(media.router)
 router.include_router(media_items.router)
