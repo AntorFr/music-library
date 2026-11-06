@@ -58,7 +58,7 @@ Evidence: `app/api/rfid.py`: `GET /api/v1/rfid` and `GET /api/v1/rfid/<uid>/medi
 `get_current_user` and call no `ensure_media_access`/`can_view_media`. Any logged-in child gets, for
 every RFID tag, the `media_id` and `media_title`, and for a known UID the media `title`, `source_uri`,
 `provider` and cover URL — whoever owns the media. Every other media route answers 404 to a child
-for media outside their tags. Pinned today (as doubtful) by `tests/test_rfid_api.py::test_a_child_can_still_read_and_resolve`.
+for media outside their tags.
 Proposed fix (to be accepted by the owner): in both routes inject `get_current_user`; in the list, drop the
 entries whose media the user cannot view (`can_view_media`) — unassigned tags stay listed; in resolve,
 answer exactly the 404 of an unknown UID — same status and same body, so a hidden card cannot be told
@@ -69,7 +69,7 @@ Test that must fail without it: a child session listing/resolving a tag assigned
 another owner (expects the tag filtered / 404); a parent and the bearer token still get 200 and the
 full list. The existing test above pins an untagged media read by a child and will then need the
 tester's decision.
-**Owner's answer:** Decision of the owner (2026-11-05), option (a): fix ACCEPTED. `GET /api/v1/rfid` filters by `can_view_media` and `GET /api/v1/rfid/<uid>/media` answers 404 for media outside the signed-in child's scope; parents, bearer token and dev mode unchanged. Applied under a test that fails without it; `test_a_child_can_still_read_and_resolve` to be revisited accordingly. S-9 (ESP port 8001 without auth): no answer, stays a recommendation.
+**Owner's answer:** Decision of the owner (2026-11-05), option (a): fix ACCEPTED. `GET /api/v1/rfid` filters by `can_view_media` and `GET /api/v1/rfid/<uid>/media` answers 404 for media outside the signed-in child's scope; parents, bearer token and dev mode unchanged. Applied under a test that fails without it. S-9 (ESP port 8001 without auth): no answer, stays a recommendation.
 **Applied:** yes — `app/api/rfid.py` (both routes inject `get_current_user`). The tester adds the failing-without-fix test.
 
 **S-2 — fixed — a non-ASCII `Authorization: Bearer` value gave an unauthenticated 500.**

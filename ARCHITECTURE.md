@@ -118,7 +118,7 @@ holding criticals to the end (AD-6); fixing non-critical findings in passing
 No README, no ADR directory; the 14 original test files (122 tests) are now completed by the
 net slice (67 % line coverage, per module in `docs/quality/coverage.md`); `ruff check` is clean
 (lint slice) and `.github/workflows/ci.yml` runs `ruff check .` and `pytest` on every pull
-request to `main` (the first run on a PR confirms it on the forge); `views.py` (1179 lines) and `music_assistant.py` (990)
+request to `main` (the first run on a PR confirms it on the forge); `views.py` (1188 lines) and `music_assistant.py` (999)
 dominate; `docs/PLAN.md` is a six-phase plan from before v0.1; `TODO.md` holds
 backlog items to move to the recommendations.
 
