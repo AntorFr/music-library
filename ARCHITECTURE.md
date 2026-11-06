@@ -10,12 +10,28 @@ epic (`music-library-qualite`) and decisions below are numbered `AD-n`.
 
 | Organ | Where | Holds |
 |---|---|---|
-| Entry and wiring | `app/main.py`, `app/server.py`, `app/config.py`, `app/database.py` | app factory, settings, DB session (health: `app/api/system.py`, `/api/v1/health`) |
-| API and pages | `app/api/` | REST routes, quick/launcher API, server-rendered views (package `views/`: `shared`, `listen`, `media`, `media_items`, `settings`, `browse`) |
-| Services | `app/services/` | MA client (`music_assistant.py`; data classes in `ma_models.py`, pure helpers in `ma_helpers.py`), import, media (`media_service.py`; tags in `media_tags.py`, query selection in `media_selection.py`), tags, covers, select engine, RFID, auth, permissions, Spotify accounts |
-| Models and schemas | `app/models/`, `app/schemas/` | persistence and API shapes |
+| Entry and wiring | `app/__init__.py`, `app/main.py`, `app/server.py`, `app/config.py`, `app/database.py` | app factory, two-port runner, settings, DB session (health: `app/api/system.py`, `/api/v1/health`) |
+| API and pages | `app/api/` (`__init__.py`, `auth.py`, `covers.py`, `media.py`, `music_assistant.py`, `quick.py`, `rfid.py`, `system.py`, `tags.py`) | REST routes, quick/launcher API, login routes |
+| Views | `app/api/views/` (package: `__init__.py`, `shared.py`, `listen.py`, `media.py`, `media_items.py`, `settings.py`, `browse.py`) | server-rendered pages; `__init__.py` exposes the one `router` |
+| Services | `app/services/` (`__init__.py`, `music_assistant.py`, `ma_models.py`, `ma_helpers.py`, `ma_import.py`, `media_service.py`, `media_tags.py`, `media_selection.py`, `tag_service.py`, `cover_service.py`, `select_engine.py`, `rfid_service.py`, `auth_service.py`, `permissions.py`, `spotify_accounts.py`) | MA client (data classes in `ma_models`, pure helpers in `ma_helpers`), import, media (tags in `media_tags`, query selection in `media_selection`), tags, covers, select engine, RFID, auth, permissions, Spotify accounts |
+| Models and schemas | `app/models/` (`__init__.py`, `media.py`, `rfid.py`), `app/schemas/` (`__init__.py`, `media.py`, `rfid.py`) | persistence and API shapes |
 | ESP | `app/esp_app.py` | embedded-reader API |
 | Templates and static | `app/templates/`, `app/static/` | pages and components |
+
+## Durable decisions
+
+Decisions that still govern the code, each restated as an ADR in
+[`docs/adr/`](docs/adr/) (numbered independently of `AD-n`).
+
+| ADR | Decision |
+|---|---|
+| [0001](docs/adr/0001-oidc-parent-child-roles-and-open-dev-mode.md) | OIDC login, parent/child roles by owner tag, open dev mode |
+| [0002](docs/adr/0002-static-bearer-token-for-machine-calls.md) | A static bearer token for machine callers |
+| [0003](docs/adr/0003-music-assistant-plays-and-pins-spotify-accounts.md) | Music Assistant is the source of playback; Spotify lists pinned by `source_uri` |
+| [0004](docs/adr/0004-signed-thumbnail-proxy.md) | Thumbnails go through a signed, cached proxy |
+| [0005](docs/adr/0005-sqlite-schema-created-and-upgraded-at-startup.md) | SQLite, schema created and upgraded in `init_db` (no Alembic migration exists) |
+| [0006](docs/adr/0006-separate-esp-port.md) | The embedded reader API is served on its own port |
+| [0007](docs/adr/0007-shared-in-flight-ma-calls-and-keepalive.md) | Identical MA calls are shared; slow answers are kept alive |
 
 ## Decisions of the quality pass
 
