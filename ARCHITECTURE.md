@@ -11,7 +11,7 @@ epic (`music-library-qualite`) and decisions below are numbered `AD-n`.
 | Organ | Where | Holds |
 |---|---|---|
 | Entry and wiring | `app/main.py`, `app/server.py`, `app/config.py`, `app/database.py` | app factory, settings, DB session (health: `app/api/system.py`, `/api/v1/health`) |
-| API and pages | `app/api/` | REST routes, quick/launcher API, server-rendered views (`views.py`) |
+| API and pages | `app/api/` | REST routes, quick/launcher API, server-rendered views (package `views/`, one module per family of pages) |
 | Services | `app/services/` | MA client, import, media, tags, covers, select engine, RFID, auth, permissions, Spotify accounts |
 | Models and schemas | `app/models/`, `app/schemas/` | persistence and API shapes |
 | ESP | `app/esp_app.py` | embedded-reader API |
