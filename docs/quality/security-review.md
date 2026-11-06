@@ -61,7 +61,8 @@ every RFID tag, the `media_id` and `media_title`, and for a known UID the media 
 for media outside their tags. Pinned today (as doubtful) by `tests/test_rfid_api.py::test_a_child_can_still_read_and_resolve`.
 Proposed fix (to be accepted by the owner): in both routes inject `get_current_user`; in the list, drop the
 entries whose media the user cannot view (`can_view_media`) — unassigned tags stay listed; in resolve,
-answer the same 404 as an unknown UID (`ensure_media_access`). Parents, the bearer token and dev mode
+answer exactly the 404 of an unknown UID — same status and same body, so a hidden card cannot be told
+apart from a non-existent one (`can_view_media`, no `ensure_media_access`). Parents, the bearer token and dev mode
 (`view_owner_keys is None`) keep exactly today's answers, so the Home Assistant / ESP readers are
 unchanged. Behaviour changes only for a child, who stops seeing media they could not open anywhere else.
 Test that must fail without it: a child session listing/resolving a tag assigned to a media tagged for
