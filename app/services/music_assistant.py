@@ -599,50 +599,50 @@ class MusicAssistantClient:
 
     # --- High-level: Library listings ---
 
+    async def _get_library(
+        self, media_type: str, search: str | None, limit: int | None
+    ) -> list[MAMediaItem]:
+        """List one media type from the MA library (single implementation)."""
+        result = await self._send_command(
+            f"music/{media_type}/library_items", search=search, limit=limit
+        )
+        return [MAMediaItem(i) for i in (result or [])]
+
     async def get_library_playlists(
         self, search: str | None = None, limit: int | None = None
     ) -> list[MAMediaItem]:
         """List playlists from the MA library."""
-        result = await self._send_command(
-            "music/playlists/library_items", search=search, limit=limit
-        )
-        return [MAMediaItem(i) for i in (result or [])]
+        return await self._get_library("playlists", search, limit)
 
     async def get_library_albums(
         self, search: str | None = None, limit: int | None = None
     ) -> list[MAMediaItem]:
         """List albums from the MA library."""
-        result = await self._send_command(
-            "music/albums/library_items", search=search, limit=limit
-        )
-        return [MAMediaItem(i) for i in (result or [])]
+        return await self._get_library("albums", search, limit)
 
     async def get_library_tracks(
         self, search: str | None = None, limit: int | None = None
     ) -> list[MAMediaItem]:
         """List tracks from the MA library."""
-        result = await self._send_command(
-            "music/tracks/library_items", search=search, limit=limit
-        )
-        return [MAMediaItem(i) for i in (result or [])]
+        return await self._get_library("tracks", search, limit)
 
     async def get_library_radios(
         self, search: str | None = None, limit: int | None = None
     ) -> list[MAMediaItem]:
         """List radio stations from the MA library."""
-        result = await self._send_command(
-            "music/radios/library_items", search=search, limit=limit
-        )
-        return [MAMediaItem(i) for i in (result or [])]
+        return await self._get_library("radios", search, limit)
 
     async def get_library_audiobooks(
         self, search: str | None = None, limit: int | None = None
     ) -> list[MAMediaItem]:
         """List audiobooks from the MA library."""
-        result = await self._send_command(
-            "music/audiobooks/library_items", search=search, limit=limit
-        )
-        return [MAMediaItem(i) for i in (result or [])]
+        return await self._get_library("audiobooks", search, limit)
+
+    async def get_library_podcasts(
+        self, search: str | None = None, limit: int | None = None
+    ) -> list[MAMediaItem]:
+        """List podcasts from the MA library."""
+        return await self._get_library("podcasts", search, limit)
 
     async def get_podcast_episodes(
         self, item_id: str, provider: str
@@ -691,15 +691,6 @@ class MusicAssistantClient:
     async def get_provider_configs(self) -> list[dict]:
         """Every configured provider instance, loaded or not (``status``, ``last_error``)."""
         return await self._send_command("config/providers") or []
-
-    async def get_library_podcasts(
-        self, search: str | None = None, limit: int | None = None
-    ) -> list[MAMediaItem]:
-        """List podcasts from the MA library."""
-        result = await self._send_command(
-            "music/podcasts/library_items", search=search, limit=limit
-        )
-        return [MAMediaItem(i) for i in (result or [])]
 
     # --- High-level: Players ---
 
