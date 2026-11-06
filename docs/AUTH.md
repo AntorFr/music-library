@@ -34,7 +34,8 @@ Garde-fous côté enfant :
 - la suppression définitive (`hard=true`) est réservée aux parents (l'enfant
   ne fait que du soft delete, réversible) ;
 - les médias des autres répondent **404** (pas de sondage d'existence) ;
-- gestion des tags/catégories, RFID et import MA global : **parents uniquement** (403).
+- gestion des tags/catégories, écritures RFID et import MA global : **parents uniquement** (403) ;
+- lecture RFID (`GET /api/v1/rfid`, `/rfid/<uid>/media`) : filtrée comme le reste, un enfant ne voit pas les cartes des médias des autres (la liste les omet, la résolution répond 404 comme pour une carte inconnue).
 
 ## Variables d'environnement
 
@@ -55,7 +56,7 @@ Garde-fous côté enfant :
 
 - **App principale (port 8000)** : tout (UI + `/api/v1`) exige une session OIDC
   ou le bearer `ML_API_TOKEN`. Exemptions : `/auth/*`, `/static/*`, `/covers/*`,
-  `/manifest.webmanifest`, `/api/v1/health`.
+  `/manifest.webmanifest`, `/favicon.ico`, `/api/v1/health`.
 - **App ESP (port 8001)** : aucune auth (réseau interne, clients embarqués —
   une redirection 302 vers l'IdP les casserait).
 

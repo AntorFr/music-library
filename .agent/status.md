@@ -1,8 +1,26 @@
 # Status — Music Library
 
-> MàJ : 2026-09-30
+> MàJ : 2026-11-06
 
-**État :** v0.26.0 — la fiche d'un podcast / playlist / album Spotify a un bloc
+**Filet de tests (passe qualité, tranche `music-library-qualite-filet`) :** 485 tests verts à la fin de cette tranche ; 545 après la revue de sécurité
+(122 existants intacts + 344 de caractérisation + 19 de la tranche lint/CI : pages, `/health`, couvertures, API REST,
+permissions par tag, MA derrière un stub, comptes Spotify, RFID, ESP, démarrage/`init_db`).
+Couverture 67 % (`pytest --cov=app`), par module dans `docs/quality/coverage.md`, avec les
+zones sans test et 15 comportements douteux épinglés tels quels (aucun code de `app/` modifié).
+Il n'existe aucune migration Alembic : le schéma évolue dans `init_db` (AD-filet-2).
+Lancer (Python ≥ 3.12, dans un venv : `python3 -m venv .venv && . .venv/bin/activate`) : `pip install -e '.[dev]' && pytest` ; l'app sans MA : `ML_DATABASE_URL=sqlite+aiosqlite:///data/library.db python -m app.server`
+(crée `data/` au besoin ; ports 8000 app, 8001 API ESP) puis `curl localhost:8000/api/v1/health` (pas `/health`) (MA injoignable n'empêche pas le démarrage).
+Piège : `default_cover` est un chemin relatif ; hors `app/` ou `/app`, la route de couverture par défaut répond 500.
+
+**Revue de sécurité (tranche `music-library-qualite-securite`) :** `docs/quality/security-review.md` — table des menaces (6 familles) et 21 constats `S-n` classés. Deux critiques, acceptés par Monsieur et appliqués sous test : S-1 (un enfant lisait, par `GET /api/v1/rfid` et `/rfid/<uid>/media`, les médias des autres : ces routes filtrent désormais sur `can_view_media`) et S-13 (XSS stocké par titre / `source_uri` : toast en `textContent`, gestionnaires `data-*`, `tojson`). Corrigés sans changement de comportement : S-2 (bearer non ASCII → 500) et S-12 (signature `thumb` non ASCII → 500). Les 17 autres sont des recommandations (B-7), non appliquées, que la tranche recommandations reprend (dont S-9 : port ESP 8001 sans authentification). 545 tests verts, `ruff check .` propre ; `version` / `app_version` inchangés.
+
+**Lint et CI (tranche `music-library-qualite-lint-ci`) :** `ruff check .` ne rend rien (jeu `E, F, I, UP, B, SIM`,
+`line-length = 100` inchangés ; 169 constats au départ sur ruff 0.17.3, contre 148 comptés à v0.26.0 : le filet a ajouté des fichiers). Ignores, chacun motivé dans `pyproject.toml` ou en `# noqa` :
+E501 sous `tests/**`, B008 pour les appels FastAPI (`Depends`, `Query`, `Form`, `Body`), `UP042`/`UP047` en ligne.
+`.github/workflows/ci.yml` lance `ruff check .` puis `pytest` (Python 3.12) sur chaque PR vers `main`, sans contournement ;
+485 tests verts. Jamais `--unsafe-fixes` (AD-lint-ci-1). Pas de `ruff format`, pas de mypy.
+
+**État produit :** v0.27.0 (release du filet, sans changement fonctionnel) ; dernier changement fonctionnel, v0.26.0 — la fiche d'un podcast / playlist / album Spotify a un bloc
 « Compte Spotify » (parents) : il épingle le média sur un compte MA en réécrivant
 `source_uri` en URI d'instance, après avoir vérifié que ce compte renvoie du contenu.
 Motif : en `library://`, MA tire un compte au hasard, compte mort compris → 0 épisode.
@@ -26,7 +44,7 @@ servait d'accueil, et la page Lecteurs qui listait les enceintes sans un seul
 bouton. Les filtres du catalogue passent du mur de `<select>` à des pastilles
 qui sont des liens (chaque état de filtre est une URL). Enfin, la **barre de
 lecture** branche l'API de contrôle MA — qui existait depuis les écrans
-embarqués mais que l'interface web n'appelait jamais. 108 tests verts.
+embarqués mais que l'interface web n'appelait jamais. (À l'époque : 108 tests ; aujourd'hui 545.)
 
 **Prochaines étapes :**
 - [ ] Vérifier sur l'instance MA réelle que le dernier épisode arrive bien en
