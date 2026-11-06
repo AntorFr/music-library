@@ -6,6 +6,7 @@ Provides stable local URLs for ESPHome and the frontend.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import hmac
 import logging
@@ -136,7 +137,7 @@ def media_type_for(fmt: str | None) -> str:
     return _fmt(fmt)[2]
 
 
-def _save(img: "Image.Image", path: Path, pil_fmt: str) -> None:
+def _save(img: Image.Image, path: Path, pil_fmt: str) -> None:
     """Encode a PIL image to `path` in the given Pillow format (JPEG tuned; BMP is lossless)."""
     if pil_fmt == "JPEG":
         img.save(path, "JPEG", quality=85, optimize=True)
@@ -152,10 +153,8 @@ def clear_resized(media_id: str) -> None:
     """Drop cached resized variants (call when the base cover changes) — every format."""
     for _pil, ext, _mime in _FORMATS.values():
         for p in settings.covers_dir.glob(f"{media_id}_*{ext}"):
-            try:
+            with contextlib.suppress(OSError):
                 p.unlink()
-            except OSError:
-                pass
 
 
 def get_or_make_resized(media_id: str, size: int | None, fmt: str = "jpg") -> Path | None:
@@ -223,13 +222,15 @@ async def ensure_local_cover(media_id: str, cover_url: str | None) -> str | None
 
 def sign_thumb(src_url: str, size: int) -> str:
     """HMAC signature binding a source URL to a size (hex, truncated)."""
-    msg = f"{src_url}|{size}".encode("utf-8")
+    msg = f"{src_url}|{size}".encode()
     return hmac.new(_THUMB_KEY, msg, hashlib.sha256).hexdigest()[:16]
 
 
 def verify_thumb(src_url: str, size: int, sig: str) -> bool:
     """Constant-time check that `sig` was produced by us for this (src, size)."""
-    return hmac.compare_digest(sign_thumb(src_url, size), sig or "")
+    # Bytes, not str: compare_digest raises TypeError on non-ASCII text (a crafted `sig`
+    # would answer 500 instead of 403).
+    return hmac.compare_digest(sign_thumb(src_url, size).encode(), (sig or "").encode())
 
 
 def thumb_proxy_url(base: str, src_url: str | None, size: int) -> str | None:

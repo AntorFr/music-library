@@ -4,16 +4,17 @@ from __future__ import annotations
 
 import enum
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     DateTime,
     Enum,
     ForeignKey,
     Index,
     Integer,
-    JSON,
     String,
     Text,
     UniqueConstraint,
@@ -22,12 +23,14 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 
+if TYPE_CHECKING:
+    from app.models.rfid import RFIDTag
 
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
 
-class MediaType(str, enum.Enum):
+class MediaType(str, enum.Enum):  # noqa: UP042 — str() and format() must keep returning the raw value, StrEnum would change them
     playlist = "playlist"
     audiobook = "audiobook"
     radio = "radio"
@@ -98,13 +101,13 @@ class Media(Base):
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )
 
@@ -113,7 +116,7 @@ class Media(Base):
         "Tag", secondary="media_tags", back_populates="media", lazy="selectin"
     )
 
-    rfid_tags: Mapped[list["RFIDTag"]] = relationship(
+    rfid_tags: Mapped[list[RFIDTag]] = relationship(
         "RFIDTag", back_populates="media", lazy="selectin"
     )
 
@@ -135,7 +138,7 @@ class TagCategoryModel(Base):
     color: Mapped[str | None] = mapped_column(String(7), nullable=True)
 
     # Relationships
-    tags: Mapped[list["Tag"]] = relationship("Tag", back_populates="category_rel", lazy="selectin")
+    tags: Mapped[list[Tag]] = relationship("Tag", back_populates="category_rel", lazy="selectin")
 
     def __repr__(self) -> str:
         return f"<TagCategory {self.slug} ({self.label})>"
@@ -161,7 +164,9 @@ class Tag(Base):
     )
 
     # Relationships
-    category_rel: Mapped[TagCategoryModel] = relationship("TagCategoryModel", back_populates="tags", lazy="selectin")
+    category_rel: Mapped[TagCategoryModel] = relationship(
+        "TagCategoryModel", back_populates="tags", lazy="selectin"
+    )
     media: Mapped[list[Media]] = relationship(
         "Media", secondary="media_tags", back_populates="tags", lazy="selectin"
     )
