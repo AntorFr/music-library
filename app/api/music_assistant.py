@@ -78,7 +78,7 @@ async def ma_get_item(
     try:
         item = await ma.get_item_by_uri(uri)
     except Exception as exc:
-        raise HTTPException(400, detail=f"Impossible de récupérer l'élément: {exc}")
+        raise HTTPException(400, detail=f"Impossible de récupérer l'élément: {exc}") from exc
 
     data = item.to_dict()
     data["thumb_url_resolved"] = ma.get_item_image_url(item, size=300)
@@ -101,84 +101,20 @@ async def ma_get_item(
 # Library listings
 # ---------------------------------------------------------------------------
 
-@router.get("/library/playlists")
-async def ma_playlists(
+LIBRARY_KINDS = ("playlists", "albums", "tracks", "radios", "audiobooks", "podcasts")
+
+
+@router.get("/library/{kind}")
+async def ma_library(
+    kind: str,
     search: str | None = None,
     limit: int | None = None,
     ma: MusicAssistantClient = Depends(get_ma_client),
 ):
-    """Lister les playlists de la bibliothèque MA."""
-    items = await ma.get_library_playlists(search=search, limit=limit)
-    return [
-        {**item.to_dict(), "thumb_url_resolved": ma.get_item_image_url(item, size=300)}
-        for item in items
-    ]
-
-
-@router.get("/library/albums")
-async def ma_albums(
-    search: str | None = None,
-    limit: int | None = None,
-    ma: MusicAssistantClient = Depends(get_ma_client),
-):
-    """Lister les albums de la bibliothèque MA."""
-    items = await ma.get_library_albums(search=search, limit=limit)
-    return [
-        {**item.to_dict(), "thumb_url_resolved": ma.get_item_image_url(item, size=300)}
-        for item in items
-    ]
-
-
-@router.get("/library/tracks")
-async def ma_tracks(
-    search: str | None = None,
-    limit: int | None = None,
-    ma: MusicAssistantClient = Depends(get_ma_client),
-):
-    """Lister les pistes de la bibliothèque MA."""
-    items = await ma.get_library_tracks(search=search, limit=limit)
-    return [
-        {**item.to_dict(), "thumb_url_resolved": ma.get_item_image_url(item, size=300)}
-        for item in items
-    ]
-
-
-@router.get("/library/radios")
-async def ma_radios(
-    search: str | None = None,
-    limit: int | None = None,
-    ma: MusicAssistantClient = Depends(get_ma_client),
-):
-    """Lister les stations radio de la bibliothèque MA."""
-    items = await ma.get_library_radios(search=search, limit=limit)
-    return [
-        {**item.to_dict(), "thumb_url_resolved": ma.get_item_image_url(item, size=300)}
-        for item in items
-    ]
-
-
-@router.get("/library/audiobooks")
-async def ma_audiobooks(
-    search: str | None = None,
-    limit: int | None = None,
-    ma: MusicAssistantClient = Depends(get_ma_client),
-):
-    """Lister les livres audio de la bibliothèque MA."""
-    items = await ma.get_library_audiobooks(search=search, limit=limit)
-    return [
-        {**item.to_dict(), "thumb_url_resolved": ma.get_item_image_url(item, size=300)}
-        for item in items
-    ]
-
-
-@router.get("/library/podcasts")
-async def ma_podcasts(
-    search: str | None = None,
-    limit: int | None = None,
-    ma: MusicAssistantClient = Depends(get_ma_client),
-):
-    """Lister les podcasts de la bibliothèque MA."""
-    items = await ma.get_library_podcasts(search=search, limit=limit)
+    """Lister playlists, albums, pistes, radios, livres audio ou podcasts de la bibliothèque MA."""
+    if kind not in LIBRARY_KINDS:
+        raise HTTPException(status_code=404, detail="Not Found")
+    items = await getattr(ma, f"get_library_{kind}")(search=search, limit=limit)
     return [
         {**item.to_dict(), "thumb_url_resolved": ma.get_item_image_url(item, size=300)}
         for item in items
@@ -208,7 +144,10 @@ async def ma_play(
     radio_mode: bool = False,
     seek: int | None = Query(
         None,
-        description="Position en secondes — saute à cet offset après le démarrage (ex: début de chapitre).",
+        description=(
+            "Position en secondes — saute à cet offset après le démarrage "
+            "(ex: début de chapitre)."
+        ),
     ),
     ma: MusicAssistantClient = Depends(get_ma_client),
 ):
@@ -226,7 +165,7 @@ async def ma_play(
                 import logging
                 logging.getLogger(__name__).warning("Seek failed: %s", exc)
     except Exception as exc:
-        raise HTTPException(500, detail=f"Erreur de lecture: {exc}")
+        raise HTTPException(500, detail=f"Erreur de lecture: {exc}") from exc
     return {"status": "ok", "queue_id": queue_id, "uri": uri, "seek": seek}
 
 

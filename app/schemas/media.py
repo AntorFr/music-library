@@ -5,11 +5,9 @@ from __future__ import annotations
 import enum
 from datetime import datetime
 
-from pydantic import BaseModel, Field
-from pydantic import field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from app.models.media import MediaType
-
 
 # ---------------------------------------------------------------------------
 # Tag category schemas
@@ -219,7 +217,7 @@ class MediaSelectParams(BaseModel):
     limit: int = Field(10, ge=1, le=100)
 
 
-class SelectionFallback(str, enum.Enum):
+class SelectionFallback(str, enum.Enum):  # noqa: UP042 — str() and format() must keep returning the raw value, StrEnum would change them
     """Fallback mode when strict selection returns 0 items."""
 
     none = "none"
@@ -267,7 +265,7 @@ class TagQueryGroup(BaseModel):
     """
 
     all_of: list[TagFilter] = Field(default_factory=list)
-    any_of: list["TagQueryGroup"] = Field(default_factory=list)
+    any_of: list[TagQueryGroup] = Field(default_factory=list)
     none_of: list[TagFilter] = Field(default_factory=list)
 
 

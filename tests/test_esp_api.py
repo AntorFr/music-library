@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 import time
 from pathlib import Path
-from urllib.parse import quote
 
 import pytest
 from httpx import ASGITransport, AsyncClient

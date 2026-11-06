@@ -2,23 +2,23 @@
 {% set active_nav = "catalog" %}
 
 {% block title %}
-  {% if item %}Modifier « {{ item.title }} »{% else %}Ajouter un média{% endif %} — Music Library
+  Modifier « {{ item.title }} » — Music Library
 {% endblock %}
 
 {% block topbar_title %}
-  {% if item %}Modifier le média{% else %}Nouveau média{% endif %}
+  Modifier le média
 {% endblock %}
 
 {% block content %}
 <div style="max-width: 700px;">
   <form method="POST"
-        action="{% if item %}/media/{{ item.id }}/edit{% else %}/media/new{% endif %}"
+        action="/media/{{ item.id }}/edit"
         enctype="multipart/form-data">
 
     <div class="form-group">
       <label class="form-label">Titre *</label>
       <input type="text" name="title" class="form-control" required
-             value="{{ item.title if item else '' }}"
+             value="{{ item.title }}"
              placeholder="Nom du média">
     </div>
 
@@ -27,7 +27,7 @@
         <label class="form-label">Type *</label>
         <select name="media_type" class="form-control" required>
           {% for t in media_types %}
-          <option value="{{ t.value }}" {% if item and item.media_type.value == t.value %}selected{% endif %}>
+          <option value="{{ t.value }}" {% if item.media_type.value == t.value %}selected{% endif %}>
             {{ type_labels.get(t.value, t.value) }}
           </option>
           {% endfor %}
@@ -37,7 +37,7 @@
       <div class="form-group flex-1">
         <label class="form-label">Fournisseur *</label>
         <input type="text" name="provider" class="form-control" required
-               value="{{ item.provider if item else '' }}"
+               value="{{ item.provider }}"
                placeholder="spotify, youtube, etc.">
       </div>
     </div>
@@ -45,31 +45,31 @@
     <div class="form-group">
       <label class="form-label">URI Source *</label>
       <input type="text" name="source_uri" class="form-control" required
-             value="{{ item.source_uri if item else '' }}"
+             value="{{ item.source_uri }}"
              placeholder="spotify://playlist/xxx">
     </div>
 
     <div class="form-group">
       <label class="form-label">URL de couverture</label>
       <input type="url" name="cover_url" class="form-control"
-             value="{{ item.cover_url or '' if item else '' }}"
+             value="{{ item.cover_url or '' }}"
              placeholder="https://…/cover.jpg">
     </div>
 
     <div class="form-group">
       <label class="form-label">Durée (minutes)</label>
       <input type="number" name="duration_min" class="form-control" min="0"
-             value="{{ item.duration_min or '' if item else '' }}"
+             value="{{ item.duration_min or '' }}"
              placeholder="60">
     </div>
 
     <div class="form-group">
       <label class="form-label">Description</label>
       <textarea name="description" class="form-control"
-                placeholder="Description optionnelle…">{{ item.description or '' if item else '' }}</textarea>
+                placeholder="Description optionnelle…">{{ item.description or '' }}</textarea>
     </div>
 
-    {% if item %}
+    {# Actif #}
     <div class="form-group">
       <label class="form-label">Actif</label>
       <select name="is_active" class="form-control">
@@ -77,13 +77,13 @@
         <option value="false" {% if not item.is_active %}selected{% endif %}>Non</option>
       </select>
     </div>
-    {% endif %}
+    {# fin Actif #}
 
     <!-- Tags -->
     <div class="form-group">
       <label class="form-label">Tags</label>
       <div class="d-flex flex-wrap gap-1 mb-2" id="selectedTags">
-        {% if item and item.tags %}
+        {% if item.tags %}
           {% for tag in item.tags %}
           {% set locked = current_user is defined and current_user.owner_value
              and tag.category == 'owner' %}
@@ -120,9 +120,9 @@
     <div class="d-flex gap-2 mt-4">
       <button type="submit" class="btn btn-primary">
         <i class="mdi mdi-check"></i>
-        {% if item %}Enregistrer{% else %}Créer{% endif %}
+        Enregistrer
       </button>
-      <a href="{% if item %}/media/{{ item.id }}{% else %}/media{% endif %}" class="btn btn-outline">
+      <a href="/media/{{ item.id }}" class="btn btn-outline">
         Annuler
       </a>
     </div>
