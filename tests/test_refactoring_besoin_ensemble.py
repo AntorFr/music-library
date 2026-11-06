@@ -204,3 +204,17 @@ def test_version_et_migrations_inchangees():
     assert 'app_version: str = "0.27.0"' in (ROOT / "app/config.py").read_text()
     assert not list(ROOT.rglob("alembic*/versions/*.py"))
     assert not (ROOT / "alembic").exists()
+
+
+def test_openapi_aucune_operation_n_a_d_etiquette_en_double_et_les_pages_gardent_frontend(live):
+    client, _, _ = live
+    spec = client.get("/openapi.json").json()
+    tags = {
+        f"{m} {p}": op.get("tags", [])
+        for p, ops in spec["paths"].items()
+        for m, op in ops.items()
+        if m in {"get", "post", "put", "patch", "delete"}
+    }
+    dupes = sorted(k for k, t in tags.items() if len(t) != len(set(t)))
+    assert dupes == []
+    assert sum(1 for t in tags.values() if t == ["frontend"]) == 27
