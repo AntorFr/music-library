@@ -101,84 +101,20 @@ async def ma_get_item(
 # Library listings
 # ---------------------------------------------------------------------------
 
-@router.get("/library/playlists")
-async def ma_playlists(
+LIBRARY_KINDS = ("playlists", "albums", "tracks", "radios", "audiobooks", "podcasts")
+
+
+@router.get("/library/{kind}")
+async def ma_library(
+    kind: str,
     search: str | None = None,
     limit: int | None = None,
     ma: MusicAssistantClient = Depends(get_ma_client),
 ):
-    """Lister les playlists de la bibliothèque MA."""
-    items = await ma.get_library_playlists(search=search, limit=limit)
-    return [
-        {**item.to_dict(), "thumb_url_resolved": ma.get_item_image_url(item, size=300)}
-        for item in items
-    ]
-
-
-@router.get("/library/albums")
-async def ma_albums(
-    search: str | None = None,
-    limit: int | None = None,
-    ma: MusicAssistantClient = Depends(get_ma_client),
-):
-    """Lister les albums de la bibliothèque MA."""
-    items = await ma.get_library_albums(search=search, limit=limit)
-    return [
-        {**item.to_dict(), "thumb_url_resolved": ma.get_item_image_url(item, size=300)}
-        for item in items
-    ]
-
-
-@router.get("/library/tracks")
-async def ma_tracks(
-    search: str | None = None,
-    limit: int | None = None,
-    ma: MusicAssistantClient = Depends(get_ma_client),
-):
-    """Lister les pistes de la bibliothèque MA."""
-    items = await ma.get_library_tracks(search=search, limit=limit)
-    return [
-        {**item.to_dict(), "thumb_url_resolved": ma.get_item_image_url(item, size=300)}
-        for item in items
-    ]
-
-
-@router.get("/library/radios")
-async def ma_radios(
-    search: str | None = None,
-    limit: int | None = None,
-    ma: MusicAssistantClient = Depends(get_ma_client),
-):
-    """Lister les stations radio de la bibliothèque MA."""
-    items = await ma.get_library_radios(search=search, limit=limit)
-    return [
-        {**item.to_dict(), "thumb_url_resolved": ma.get_item_image_url(item, size=300)}
-        for item in items
-    ]
-
-
-@router.get("/library/audiobooks")
-async def ma_audiobooks(
-    search: str | None = None,
-    limit: int | None = None,
-    ma: MusicAssistantClient = Depends(get_ma_client),
-):
-    """Lister les livres audio de la bibliothèque MA."""
-    items = await ma.get_library_audiobooks(search=search, limit=limit)
-    return [
-        {**item.to_dict(), "thumb_url_resolved": ma.get_item_image_url(item, size=300)}
-        for item in items
-    ]
-
-
-@router.get("/library/podcasts")
-async def ma_podcasts(
-    search: str | None = None,
-    limit: int | None = None,
-    ma: MusicAssistantClient = Depends(get_ma_client),
-):
-    """Lister les podcasts de la bibliothèque MA."""
-    items = await ma.get_library_podcasts(search=search, limit=limit)
+    """Lister playlists, albums, pistes, radios, livres audio ou podcasts de la bibliothèque MA."""
+    if kind not in LIBRARY_KINDS:
+        raise HTTPException(status_code=404, detail="Not Found")
+    items = await getattr(ma, f"get_library_{kind}")(search=search, limit=limit)
     return [
         {**item.to_dict(), "thumb_url_resolved": ma.get_item_image_url(item, size=300)}
         for item in items

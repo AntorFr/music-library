@@ -166,6 +166,30 @@ async def test_media_edit_form_renders_the_item(client, db):
     assert f"/media/{item.id}/edit" in r.text
 
 
+async def test_media_edit_form_renders_the_edit_variant_only(client, db):
+    item = await _media(db, title="Les Contes")
+    r = await client.get(f"/media/{item.id}/edit")
+    assert f'action="/media/{item.id}/edit"' in r.text
+    assert 'value="Les Contes"' in r.text
+    assert "Modifier « Les Contes » — Music Library" in r.text
+    assert "Modifier le média" in r.text
+    assert 'name="is_active"' in r.text
+    assert f'href="/media/{item.id}" class="btn btn-outline"' in r.text
+    assert "Enregistrer" in r.text
+    # the "new media" variant of the template is gone (POST /media/new redirects, never renders it)
+    for dead in ("Ajouter un média", "Nouveau média", 'action="/media/new"', "Créer"):
+        assert dead not in r.text
+
+
+def test_media_form_template_has_no_item_guard_left():
+    import re
+    from pathlib import Path
+
+    src = Path("app/templates/media/form.html").read_text(encoding="utf-8")
+    assert not re.search(r"\{%-?\s*if\s+item\s*(%|and\b)", src)
+    assert not re.search(r"\bif item\b(?!\.)", src)
+
+
 async def test_media_edit_form_unknown_id_is_404(client):
     r = await client.get("/media/nope/edit")
     assert r.status_code == 404

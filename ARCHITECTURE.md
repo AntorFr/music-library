@@ -11,8 +11,8 @@ epic (`music-library-qualite`) and decisions below are numbered `AD-n`.
 | Organ | Where | Holds |
 |---|---|---|
 | Entry and wiring | `app/main.py`, `app/server.py`, `app/config.py`, `app/database.py` | app factory, settings, DB session (health: `app/api/system.py`, `/api/v1/health`) |
-| API and pages | `app/api/` | REST routes, quick/launcher API, server-rendered views (`views.py`) |
-| Services | `app/services/` | MA client, import, media, tags, covers, select engine, RFID, auth, permissions, Spotify accounts |
+| API and pages | `app/api/` | REST routes, quick/launcher API, server-rendered views (package `views/`: `shared`, `listen`, `media`, `media_items`, `settings`, `browse`) |
+| Services | `app/services/` | MA client (`music_assistant.py`; data classes in `ma_models.py`, pure helpers in `ma_helpers.py`), import, media (`media_service.py`; tags in `media_tags.py`, query selection in `media_selection.py`), tags, covers, select engine, RFID, auth, permissions, Spotify accounts |
 | Models and schemas | `app/models/`, `app/schemas/` | persistence and API shapes |
 | ESP | `app/esp_app.py` | embedded-reader API |
 | Templates and static | `app/templates/`, `app/static/` | pages and components |
@@ -37,7 +37,7 @@ existing test files are the base of the net, not a substitute for it.
 
 ### AD-3 — Documentation: one map, ADRs, a short status
 
-`README.md` (to create) and this file are the map. Decisions that still govern
+`README.md` and this file are the map. Decisions that still govern
 the code are restated as ADRs (`docs/adr/NNNN-title.md`, ADR-0001…,
 independent of `AD-n`; sections: Context, Decision, Rejected, Consequences).
 `docs/PLAN.md` and `REQUIREMENTS.md`, written before the code, are corrected
@@ -113,13 +113,30 @@ surfaces (Spotify, inputs, outbound calls, logs).
 holding criticals to the end (AD-6); fixing non-critical findings in passing
 (AD-1).
 
+### AD-refactoring-1 — Cut by responsibility, keep every import path and patch target
+
+A split keeps the old module as the public face: the names callers import
+(`from app.services.music_assistant import MusicAssistantClient, get_ma_client,
+resolve_ma_provider_and_id`; `from app.services import media_service`; the
+`router` of `app.api.views`) still resolve there, by re-export or because they
+stay in place. `get_ma_client` and `close_ma_client` stay *defined* in
+`app/services/music_assistant.py`: tests patch
+`app.services.music_assistant.get_ma_client`. New files only hold what moved.
+`app/api/views.py` becomes the package `app/api/views/` (`__init__.py` exposes
+the same `router`); route paths, methods and registration order are unchanged.
+Before each cut the task records the line count and the net test that covers
+the module; a module with no such test is not touched and is listed under
+"Modules conservés" in `docs/quality/coverage.md`.
+*Rejected:* renaming public functions to fit the new layout (callers and patch
+targets move); moving `get_ma_client` with the client class (breaks the
+existing monkeypatches).
+
 ## Known gaps (inputs of the pass)
 
-No README, no ADR directory; the 14 original test files (122 tests) are now completed by the
+A short README, no ADR directory; the 14 original test files (122 tests) are now completed by the
 net slice (67 % line coverage, per module in `docs/quality/coverage.md`); `ruff check` is clean
 (lint slice) and `.github/workflows/ci.yml` runs `ruff check .` and `pytest` on every pull
-request to `main` (the first run on a PR confirms it on the forge); `views.py` (1188 lines) and `music_assistant.py` (999)
-dominate; `docs/PLAN.md` is a six-phase plan from before v0.1; `TODO.md` holds
+request to `main` (the first run on a PR confirms it on the forge); the refactoring slice cut `views.py` (1188 lines, now a package), `music_assistant.py` (999 → 729) and `media_service.py` (→ 331); `docs/PLAN.md` is a six-phase plan from before v0.1; `TODO.md` holds
 backlog items to move to the recommendations.
 
 ### AD-lint-ci-1 — Lint fixes: safe fixes only, one ignore per reason, CI last

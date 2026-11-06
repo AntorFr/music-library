@@ -397,3 +397,10 @@ async def test_now_playing_exposes_the_documented_keys_and_proxies_the_cover(cli
 @pytest.mark.asyncio
 async def test_import_requires_uri(client):
     assert (await client.post("/api/v1/ma/import")).status_code == 422
+
+
+@pytest.mark.parametrize("kind", ["__class__", "Playlists", "search", "playlists.json"])
+async def test_library_rejects_non_whitelisted_kind(client, ma, kind):
+    r = await client.get(f"/api/v1/ma/library/{kind}")
+    assert r.status_code == 404
+    assert ma.calls == []
