@@ -14,6 +14,8 @@ Piège : `default_cover` est un chemin relatif ; hors `app/` ou `/app`, la route
 
 **Revue de sécurité (tranche `music-library-qualite-securite`) :** `docs/quality/security-review.md` — table des menaces (6 familles) et 21 constats `S-n` classés. Deux critiques, acceptés par Monsieur et appliqués sous test : S-1 (un enfant lisait, par `GET /api/v1/rfid` et `/rfid/<uid>/media`, les médias des autres : ces routes filtrent désormais sur `can_view_media`) et S-13 (XSS stocké par titre / `source_uri` : toast en `textContent`, gestionnaires `data-*`, `tojson`). Corrigés sans changement de comportement : S-2 (bearer non ASCII → 500) et S-12 (signature `thumb` non ASCII → 500). Les 17 autres sont des recommandations (B-7), non appliquées, que la tranche recommandations reprend (dont S-9 : port ESP 8001 sans authentification). 545 tests verts, `ruff check .` propre ; `version` / `app_version` inchangés.
 
+**Refactoring (tranche `music-library-qualite-refactoring`) :** sans changement de comportement, 600 tests verts, `ruff check .` propre. `app/api/views.py` est le paquet `app/api/views/` (même `router`, même ordre de routes) ; `music_assistant.py` (990 → 729 lignes) a perdu `ma_models.py` et `ma_helpers.py`, `media_service.py` (578 → 331) `media_tags.py` et `media_selection.py` — anciens chemins d'import ré-exportés, `get_ma_client` toujours défini dans `music_assistant.py` (cible des `monkeypatch`). Une seule implémentation `get_library_*` et un seul gestionnaire `GET /library/{kind}` (404 pour un type inconnu, comme avant). Branches mortes de `media/form.html` retirées. Piège : couper un module sans ré-exporter casse les patchs des tests (AD-refactoring-1).
+
 **Lint et CI (tranche `music-library-qualite-lint-ci`) :** `ruff check .` ne rend rien (jeu `E, F, I, UP, B, SIM`,
 `line-length = 100` inchangés ; 169 constats au départ sur ruff 0.17.3, contre 148 comptés à v0.26.0 : le filet a ajouté des fichiers). Ignores, chacun motivé dans `pyproject.toml` ou en `# noqa` :
 E501 sous `tests/**`, B008 pour les appels FastAPI (`Depends`, `Query`, `Form`, `Body`), `UP042`/`UP047` en ligne.
@@ -57,8 +59,5 @@ embarqués mais que l'interface web n'appelait jamais. (À l'époque : 108 tests
       médias des enfants sont épinglés sur Maison. Reste à repasser ceux des
       adultes encore en `library://` via le nouveau bloc « Compte Spotify ».
 - [ ] HA : ajouter `music_library_token` dans secrets.yaml sur la box + reload
-- [ ] `media/form.html` garde ses branches `{% if item %}` alors qu'il ne sert
-      plus que l'édition — nettoyage cosmétique, sans effet visible
-- [ ] Doublons restants jugés inoffensifs : 6 méthodes `get_library_*` + 6
-      routes REST `/library/<type>` ; `logo.svg` = `favicon.svg`
+- [ ] Doublon restant jugé inoffensif : `logo.svg` = `favicon.svg`
 - [ ] Backlog : voir TODO.md (recherche floue…)

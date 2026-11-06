@@ -16,7 +16,7 @@ Mesure : `pytest --cov=app` (extra `dev`, `pytest-cov`), 466 tests verts (122 ex
 | `app/api/rfid.py` | 28 | 9 | 68 % |
 | `app/api/system.py` | 13 | 0 | 100 % |
 | `app/api/tags.py` | 49 | 18 | 63 % |
-| `app/api/views.py` | 466 | 266 | 43 % |
+| `app/api/views.py` | 466 | 266 | 43 % (mesure d'origine ; depuis la tranche refactoring, paquet `app/api/views/`, non remesuré) |
 | `app/config.py` | 29 | 0 | 100 % |
 | `app/database.py` | 25 | 3 | 88 % |
 | `app/esp_app.py` | 24 | 1 | 96 % |
@@ -54,6 +54,10 @@ Le filet épingle le comportement observable par l'API et les pages (AD-filet-1)
 - `app/services/select_engine.py` (71 %) : tirage/sélection avec lecture MA (lignes 229-278), non joué sans lecteur.
 
 Les autres modules dépassent 75 %. Aucun test existant n'a été modifié ni supprimé ; seul `pyproject.toml` gagne la ligne `pytest-cov`.
+
+## Modules conservés
+
+Aucun : `views.py`, `music_assistant.py` et `media_service.py` ont chacun été coupés (tranche refactoring), et les branches `{% if item %}` de `media/form.html` n'étaient pas rendues sans `item` (le gabarit ne sert que `GET /media/{id}/edit`).
 
 ## Comportements douteux conservés
 
