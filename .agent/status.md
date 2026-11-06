@@ -2,7 +2,7 @@
 
 > MàJ : 2026-11-06
 
-**Filet de tests (passe qualité, tranche `music-library-qualite-filet`) :** 485 tests verts
+**Filet de tests (passe qualité, tranche `music-library-qualite-filet`) :** 485 tests verts à la fin de cette tranche ; 514 après la revue de sécurité
 (122 existants intacts + 344 de caractérisation + 19 de la tranche lint/CI : pages, `/health`, couvertures, API REST,
 permissions par tag, MA derrière un stub, comptes Spotify, RFID, ESP, démarrage/`init_db`).
 Couverture 67 % (`pytest --cov=app`), par module dans `docs/quality/coverage.md`, avec les
@@ -44,7 +44,7 @@ servait d'accueil, et la page Lecteurs qui listait les enceintes sans un seul
 bouton. Les filtres du catalogue passent du mur de `<select>` à des pastilles
 qui sont des liens (chaque état de filtre est une URL). Enfin, la **barre de
 lecture** branche l'API de contrôle MA — qui existait depuis les écrans
-embarqués mais que l'interface web n'appelait jamais. (À l'époque : 108 tests ; aujourd'hui 485.)
+embarqués mais que l'interface web n'appelait jamais. (À l'époque : 108 tests ; aujourd'hui 514.)
 
 **Prochaines étapes :**
 - [ ] Vérifier sur l'instance MA réelle que le dernier épisode arrive bien en
