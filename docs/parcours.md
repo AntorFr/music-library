@@ -36,8 +36,8 @@
   tells it if it broke something. Serves B-2, B-3, B-6, B-8.
 - **P-2 — The owner arbitrates.** He opens `docs/quality/recommendations.md`,
   decides each (do, later, never) in the discussion of the epic's last slice, where the chain turns the accepted ones into new epics or features; nothing in them was applied, except a
-  critical fix he accepted under AD-6, which the document then records as
-  applied. Serves B-4, B-7.
+  critical fix he accepted under AD-6, which the review records as applied
+  and the document carries over as applied. Serves B-4, B-7.
 - **P-3 — The house instance goes on.** Production stays on the pinned tag; a
   merge produces the `:main` image only, not deployed. Serves B-1.
 - **P-4 — A refactoring lands.** A change in `views.py`, `music_assistant.py` or

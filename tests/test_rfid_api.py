@@ -241,14 +241,82 @@ async def test_anonymous_callers_get_401_once_oidc_is_on(client, oidc_on):
     assert r.status_code == 401
 
 
-async def test_a_child_can_still_read_and_resolve(client, db, oidc_on):
-    """List and resolve carry no permission check (doubtful for a child scope)."""
-    item = await _media(db)
-    await rfid_service.upsert_rfid_tag(db, uid=UID_A, name="Carte A")
+async def _tagged_media(db, title, owner, uri):
+    item, _ = await media_service.create_media(
+        db,
+        MediaCreate(
+            title=title, media_type=MediaType.track, source_uri=uri, provider="spotify",
+            cover_url=None, duration_min=None, description=None, metadata_extra=None,
+            tag_ids=[], tags_inline=[{"category": "owner", "value": owner}],
+        ),
+    )
     await db.commit()
-    await rfid_service.assign_rfid_tags_to_media(db, media_id=item.id, uids=[UID_A])
+    return item
+
+
+async def _assign(db, uid, item):
+    await rfid_service.upsert_rfid_tag(db, uid=uid, name=f"Carte {uid}")
+    await db.commit()
+    await rfid_service.assign_rfid_tags_to_media(db, media_id=item.id, uids=[uid])
+    await db.commit()
+
+
+# S-1 (AD-6, accepted by the owner): a child never reads another owner's media here.
+# Fails without the fix: the list carries the other owner's title, resolve answers 200.
+
+async def test_a_child_lists_only_own_media_and_free_tags(client, db, oidc_on):
+    mine = await _tagged_media(db, "Mon disque", "lea", "spotify://track/mine")
+    theirs = await _tagged_media(db, "Secret de papa", "papa", "spotify://track/theirs")
+    await _assign(db, UID_A, mine)
+    await _assign(db, UID_B, theirs)
+    await rfid_service.upsert_rfid_tag(db, uid="04-76-D7-DA", name="Libre")
     await db.commit()
     _login(client, "child")
 
-    assert (await client.get("/api/v1/rfid")).status_code == 200
-    assert (await client.get(f"/api/v1/rfid/{UID_A}/media")).status_code == 200
+    r = await client.get("/api/v1/rfid")
+    assert r.status_code == 200
+    assert [t["uid"] for t in r.json()] == [UID_A, "04-76-D7-DA"]
+    assert "Secret de papa" not in r.text
+    assert theirs.id not in [t["media_id"] for t in r.json()]
+
+
+async def test_a_child_resolves_own_media_but_gets_404_on_another_owners(client, db, oidc_on):
+    mine = await _tagged_media(db, "Mon disque", "lea", "spotify://track/mine")
+    theirs = await _tagged_media(db, "Secret de papa", "papa", "spotify://track/theirs")
+    await _assign(db, UID_A, mine)
+    await _assign(db, UID_B, theirs)
+    _login(client, "child")
+
+    ok = await client.get(f"/api/v1/rfid/{UID_A}/media")
+    assert ok.status_code == 200
+    assert ok.json()["title"] == "Mon disque"
+    hidden = await client.get(f"/api/v1/rfid/{UID_B}/media")
+    assert hidden.status_code == 404
+    assert "Secret de papa" not in hidden.text
+    assert "spotify://track/theirs" not in hidden.text
+
+
+async def test_a_child_gets_404_on_an_untagged_media_via_rfid(client, db, oidc_on):
+    """Replaces the former 'child can still read and resolve' pin (decision of the owner):
+    an untagged media is outside a child's scope everywhere else, so here too."""
+    item = await _media(db)
+    await _assign(db, UID_A, item)
+    _login(client, "child")
+
+    assert (await client.get("/api/v1/rfid")).json() == []
+    assert (await client.get(f"/api/v1/rfid/{UID_A}/media")).status_code == 404
+
+
+async def test_a_parent_and_the_bearer_still_see_every_rfid_media(client, db, oidc_on, monkeypatch):
+    monkeypatch.setattr(settings, "api_token", "s3cret")
+    theirs = await _tagged_media(db, "Secret de papa", "papa", "spotify://track/theirs")
+    await _assign(db, UID_B, theirs)
+
+    _login(client, "parent")
+    assert [t["uid"] for t in (await client.get("/api/v1/rfid")).json()] == [UID_B]
+    assert (await client.get(f"/api/v1/rfid/{UID_B}/media")).status_code == 200
+
+    client.cookies.clear()
+    h = {"Authorization": "Bearer s3cret"}
+    assert [t["uid"] for t in (await client.get("/api/v1/rfid", headers=h)).json()] == [UID_B]
+    assert (await client.get(f"/api/v1/rfid/{UID_B}/media", headers=h)).status_code == 200

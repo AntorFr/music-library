@@ -228,7 +228,9 @@ def sign_thumb(src_url: str, size: int) -> str:
 
 def verify_thumb(src_url: str, size: int, sig: str) -> bool:
     """Constant-time check that `sig` was produced by us for this (src, size)."""
-    return hmac.compare_digest(sign_thumb(src_url, size), sig or "")
+    # Bytes, not str: compare_digest raises TypeError on non-ASCII text (a crafted `sig`
+    # would answer 500 instead of 403).
+    return hmac.compare_digest(sign_thumb(src_url, size).encode(), (sig or "").encode())
 
 
 def thumb_proxy_url(base: str, src_url: str | None, size: int) -> str | None:

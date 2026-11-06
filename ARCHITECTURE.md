@@ -10,7 +10,7 @@ epic (`music-library-qualite`) and decisions below are numbered `AD-n`.
 
 | Organ | Where | Holds |
 |---|---|---|
-| Entry and wiring | `app/main.py`, `app/server.py`, `app/config.py`, `app/database.py` | app factory, settings, `/health`, DB session |
+| Entry and wiring | `app/main.py`, `app/server.py`, `app/config.py`, `app/database.py` | app factory, settings, DB session (health: `app/api/system.py`, `/api/v1/health`) |
 | API and pages | `app/api/` | REST routes, quick/launcher API, server-rendered views (`views.py`) |
 | Services | `app/services/` | MA client, import, media, tags, covers, select engine, RFID, auth, permissions, Spotify accounts |
 | Models and schemas | `app/models/`, `app/schemas/` | persistence and API shapes |
@@ -68,7 +68,9 @@ no valid session or token can exploit it, when a child can read or write
 another owner's media, or when a Spotify credential can leak. It is escalated
 as soon as found by `pilote arbitrer` on the review slice, with its fix
 proposed: the owner decides. A fix he accepts is the one exception to AD-1 and
-is recorded as applied in `docs/quality/recommendations.md`.
+is recorded as applied in `docs/quality/security-review.md` by the review slice,
+and carried into `docs/quality/recommendations.md` by the recommendations slice
+(the file's only owner).
 
 ### AD-7 — No deployment, release rule kept
 
@@ -84,12 +86,39 @@ refreshed by the net slice; also lists the doubtful behaviours kept as they are)
 fragments `docs/quality/douteux/<task>.md`, which its coverage task merges into `coverage.md`
 and deletes (none remains once the slice is done).
 
+### AD-securite-1 — Security review: threat table first, one classified finding per row
+
+The report `docs/quality/security-review.md` opens with a threat table, written
+before reading the code in depth: for each threat family (owner-tag accounts
+and permissions; Spotify accounts; ESP/RFID API and machine-caller token; HTTP
+inputs — uploads, covers, templates; outbound calls to Music Assistant; logs)
+it names who attacks, through which entry point (a route, a header, a claim, a
+file), and what is at stake. Each row then points to the code read and ends in
+findings. A finding carries: an identifier `S-n`, the threat, the evidence
+(file and route, never a real secret or identifier — the repository is
+public), and one class: *fixed without behaviour change*, *recommendation*
+(B-7, AD-1: a hardening that rejects an input accepted today is one), or
+*critical* (AD-6). A critical finding stops the task: it is written in the
+report with its proposed fix, escalated by `pilote arbitrer` on this slice, and
+the slice stays open until the owner answers; his answer is written in the
+report. The task stops after escalating; the pod that resumes it reads the
+answer in the slice's discussion and copies it into the report before going on.
+The report also cites, for each sensitive module it reads, its measured coverage
+in `docs/quality/coverage.md`. An accepted fix is applied under a test that fails without it; a
+refusal reclassifies the finding as a recommendation. Where a threat family has
+no finding, the row says what was checked. Two tasks, chained because the
+report has one owner: identity (accounts, permissions, ESP/RFID) then
+surfaces (Spotify, inputs, outbound calls, logs).
+*Rejected:* a review by file (it hides what no file owns, e.g. a missing check);
+holding criticals to the end (AD-6); fixing non-critical findings in passing
+(AD-1).
+
 ## Known gaps (inputs of the pass)
 
 No README, no ADR directory; the 14 original test files (122 tests) are now completed by the
 net slice (67 % line coverage, per module in `docs/quality/coverage.md`); `ruff check` is clean
 (lint slice) and `.github/workflows/ci.yml` runs `ruff check .` and `pytest` on every pull
-request to `main` (the first run on a PR confirms it on the forge); `views.py` (1179 lines) and `music_assistant.py` (990)
+request to `main` (the first run on a PR confirms it on the forge); `views.py` (1188 lines) and `music_assistant.py` (999)
 dominate; `docs/PLAN.md` is a six-phase plan from before v0.1; `TODO.md` holds
 backlog items to move to the recommendations.
 
