@@ -2,7 +2,7 @@
 
 ## How to read
 
-Written last, from the finished reports of the quality pass (`docs/quality/coverage.md`, `docs/quality/security-review.md`, the banners of `docs/PLAN.md` and `docs/REQUIREMENTS.md`, and the Actions/mypy points of AD-4). It decides nothing: each entry describes, lists options and proposes one; the owner arbitrates. Entries are grouped by theme (security, behaviour kept as found, tooling and CI, documentation gaps, new functions), the one to look at first coming first. `open` means awaiting the owner's choice; `applied` carries the commit of the fix. A recommendation of a new function is never in scope. Sources: the "Modules conservés" section of `coverage.md` is "Aucun", so it gives no entry; both banners list gaps, all entered below. The `TODO.md` entries come in a following step (section "New functions", empty for now).
+Written last, from the finished reports of the quality pass (`docs/quality/coverage.md`, `docs/quality/security-review.md`, the banners of `docs/PLAN.md` and `docs/REQUIREMENTS.md`, and the Actions/mypy points of AD-4). It decides nothing: each entry describes, lists options and proposes one; the owner arbitrates. Entries are grouped by theme (security, behaviour kept as found, tooling and CI, documentation gaps, new functions), the one to look at first coming first. `open` means awaiting the owner's choice; `applied` carries the commit of the fix. A recommendation of a new function is never in scope. Sources: the "Modules conservés" section of `coverage.md` is "Aucun", so it gives no entry; both banners list gaps, all entered below. The open entries of `TODO.md` are entered in "New functions" (R-41, R-42) and `TODO.md` no longer lists them.
 
 ## Summary
 
@@ -44,6 +44,8 @@ Written last, from the finished reports of the quality pass (`docs/quality/cover
 | R-34 | Historical documents: `app/api/views.py` est devenu le paquet `app/api/views/` | `docs/PLAN.md` and `docs/REQUIREMENTS.md`, banner gap: `app/api/views.py` est devenu le paquet `app/api/views/` | Option 1 | open |
 | R-35 | Historical documents: « pas d'auth » and « multi-utilisateurs hors périmètre » are outdated | `docs/REQUIREMENTS.md`, banner gap: « pas d'auth » et « multi-utilisateurs hors périmètre » (§2, §8, hors périmètre) sont dépassés par l'authentification OIDC | Option 1. | open |
 | R-36 | Historical documents: the §7 tree no longer matches the repository | `docs/REQUIREMENTS.md`, banner gap: l'arborescence du §7 (dossier `migrations/`, `ha_integration.md`, noms des fichiers de tests) ne correspond plus au dépôt | Option 1. | open |
+| R-41 | Natural-language fuzzy search API (new function) | `TODO.md`, 1. API de recherche floue en langage naturel | Option 2 | open |
+| R-42 | Mobile quick launcher for iPad / iPhone (new function) | `TODO.md`, 2. Interface mobile « lanceur rapide » (iPad / iPhone) | Option 2 | open |
 | R-37 | A child read other owners' media through the RFID read routes | `docs/quality/security-review.md`, S-1 (critical) | done | applied |
 | R-38 | A child's title or source URI ran script in a parent's browser | `docs/quality/security-review.md`, S-13 (critical) | done | applied |
 | R-39 | A non-ASCII bearer value gave an unauthenticated 500 | `docs/quality/security-review.md`, S-2 (fixed) | done | applied |
@@ -347,7 +349,33 @@ Written last, from the finished reports of the quality pass (`docs/quality/cover
 
 ## New functions
 
-None yet.
+Both come from the open entries of `TODO.md`, moved here once. They are recommendations: nothing here is in scope until the owner chooses.
+
+### R-41 — Natural-language fuzzy search API (new function)
+
+- **Origin**: `TODO.md`, 1. API de recherche floue en langage naturel
+- **Today**: No such endpoint. The catalogue is searched by filters and titles only. Wanted: an endpoint taking free input ("propose-moi une liste sport", "lance Harry Potter 3", "un truc calme pour les enfants") and returning one or more matching items of the local catalogue.
+  - Full-text search plus semantic matching on title, description and tags (owner, mood, context, genre, age group).
+  - A ranked list: one result for a precise match, several when ambiguous.
+  - To be used from Home Assistant and the mobile interface (see R-42).
+  - Open question: a local LLM (Ollama), or plain ranking on embeddings / tags? Start with tag matching plus fuzzy matching on the title, escalate if not enough.
+- **Options**: (1) Leave as is (no natural-language search). (2) Tag matching plus fuzzy title matching, ranked, no model: small, offline, predictable. (3) Embeddings-based ranking, heavier, better on vague requests. (4) A local LLM (Ollama): most flexible, adds a service to run and slower answers.
+- **Recommendation**: Option 2 first, as the entry itself suggests; move to option 3 or 4 only if real requests show it is not enough. Developing it is the owner's call.
+- **Status**: open
+
+### R-42 — Mobile quick launcher for iPad / iPhone (new function)
+
+- **Origin**: `TODO.md`, 2. Interface mobile « lanceur rapide » (iPad / iPhone)
+- **Today**: No dedicated page. Wanted: a page to pin on the iOS home screen to start a playlist, a podcast episode or an audiobook chapter quickly.
+  - Persistent filter by **owner** (kept in localStorage).
+  - **Default speaker** remembered (same way).
+  - Touch UI, big buttons, few levels.
+  - Shows only the chosen owner's media.
+  - Direct links to the episode / chapter list for podcasts and audiobooks.
+  - Minimal PWA manifest for "add to home screen" mode, with an icon.
+- **Options**: (1) Leave as is (use the existing pages on mobile). (2) The page as described, server-rendered like the rest, with a minimal manifest. (3) The same plus offline caching through a service worker. (4) Wait for R-41 and build the launcher around its search.
+- **Recommendation**: Option 2: it covers the listed need without new moving parts; the owner filter must go through the existing permission checks (see R-7 for what a child can reach today).
+- **Status**: open
 
 ## Applied
 
