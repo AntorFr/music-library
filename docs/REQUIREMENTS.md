@@ -1,5 +1,14 @@
 # Music Library Manager — Requirements
 
+> **Document historical** — cahier des charges écrit avant le code. Il n'est pas tenu à jour (marqué, non refait) : le code fait foi.
+> Écarts connus avec le code (v0.27.0) :
+> - aucune migration Alembic ni `alembic.ini` : le schéma évolue dans `init_db` (`app/database.py`) ;
+> - l'authentification existe : client OIDC depuis v0.18.0, rôles parent / enfant (voir `docs/AUTH.md`) ;
+> - le serveur sert aussi une API ESP dédiée sur le port 8001 (`app/esp_app.py`) ;
+> - `app/api/views.py` est devenu le paquet `app/api/views/`.
+> - « pas d'auth » et « multi-utilisateurs hors périmètre » (§2, §8, hors périmètre) sont dépassés par l'authentification OIDC ;
+> - l'arborescence du §7 (dossier `migrations/`, `ha_integration.md`, noms des fichiers de tests) ne correspond plus au dépôt.
+
 ## 1. Vision
 
 Système centralisé de gestion de catalogue multimédia familial, intégré à
