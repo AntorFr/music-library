@@ -20,9 +20,9 @@ def test_every_app_module_is_cited_in_architecture():
         rel = py.relative_to(ROOT).as_posix()
         name = py.name
         pkg = py.parent.relative_to(ROOT).as_posix() + "/"
-        cited = rel in ARCH or f"`{name}`" in ARCH or f"`{name[:-3]}`" in ARCH or pkg in ARCH
+        named = rel in ARCH or f"`{name}`" in ARCH or f"`{name[:-3]}`" in ARCH
         # a bare module name is only accepted when its package is cited too
-        if not (cited and pkg in ARCH):
+        if not (named and pkg in ARCH):
             missing.append(rel)
     assert missing == []
 
