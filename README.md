@@ -16,7 +16,7 @@ mkdir -p data && ML_DATABASE_URL=sqlite+aiosqlite:///data/library.db python -m a
 curl localhost:8000/api/v1/health
 ```
 
-Run from the repository root (the `data/` paths are relative). Copy [.env.example](.env.example) to `.env` to set `ML_*` values locally.
+Run `pip install` before the first start: it fails once `data/` (git-ignored) exists next to `app/`. Run from the repository root (the `data/` paths are relative); the default cover (`ML_DEFAULT_COVER`, relative to the working directory) is then missing, so set `ML_DEFAULT_COVER=app/static/img/default_cover.jpg` or `GET /covers/<id>.jpg` for a media without cover answers 500. Copy [.env.example](.env.example) to `.env` to set `ML_*` values locally (it lists only the basic settings; the table below is complete).
 
 ### Docker
 

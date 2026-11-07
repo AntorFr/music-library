@@ -169,7 +169,7 @@ Consequences). Candidates, each kept only if the code still shows it: OIDC
 client with parent/child roles by owner tag and the open dev mode; the static
 bearer token for machine calls; Music Assistant as the source of playback and
 its Spotify account pinning by `source_uri`; the signed thumbnail proxy; SQLite
-with Alembic migrations run at startup; the separate ESP port; shared in-flight
+schema created and upgraded at startup (no Alembic; ADR 0005); the separate ESP port; shared in-flight
 Music Assistant commands and the `keepalive` page. `.agent/status.md` keeps
 the current version, the open checks that are still open and the pointer to
 `docs/quality/recommendations.md`; the version-by-version history goes (git
@@ -181,10 +181,10 @@ a short list of known divergences from the code, nothing rewritten;
 
 ## Known gaps (inputs of the pass)
 
-A short README, no ADR directory; the 14 original test files (122 tests) are now completed by the
+State at the start of the pass (the README and `docs/adr/` since exist); the 14 original test files (122 tests) are now completed by the
 net slice (67 % line coverage, per module in `docs/quality/coverage.md`); `ruff check` is clean
 (lint slice) and `.github/workflows/ci.yml` runs `ruff check .` and `pytest` on every pull
-request to `main` (the first run on a PR confirms it on the forge); the refactoring slice cut `views.py` (1188 lines, now a package), `music_assistant.py` (999 → 729) and `media_service.py` (→ 331); `docs/PLAN.md` is a six-phase plan from before v0.1; `TODO.md` holds
+request to `main` ; the refactoring slice cut `views.py` (1188 lines, now a package), `music_assistant.py` (999 → 729) and `media_service.py` (→ 331); `docs/PLAN.md` is a six-phase plan from before v0.1; `TODO.md` holds
 backlog items to move to the recommendations.
 
 ### AD-lint-ci-1 — Lint fixes: safe fixes only, one ignore per reason, CI last
