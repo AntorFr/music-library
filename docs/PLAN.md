@@ -1,5 +1,12 @@
 # Music Library Manager — Plan de marche
 
+> **Document historical** — plan de marche écrit avant le code. Il n'est pas tenu à jour (marqué, non refait) : le code fait foi.
+> Écarts connus avec le code (v0.27.0) :
+> - aucune migration Alembic ni `alembic.ini` : le schéma évolue dans `init_db` (`app/database.py`) ;
+> - l'authentification existe : client OIDC depuis v0.18.0, rôles parent / enfant (voir `docs/AUTH.md`) ;
+> - le serveur sert aussi une API ESP dédiée sur le port 8001 (`app/esp_app.py`) ;
+> - `app/api/views.py` est devenu le paquet `app/api/views/`.
+
 ## Vue d'ensemble
 
 6 phases séquentielles. Chaque phase produit un livrable fonctionnel testable.

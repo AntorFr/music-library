@@ -4,7 +4,7 @@ Tag & TagCategory CRUD service.
 
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.media import DEFAULT_TAG_CATEGORIES, Tag, TagCategoryModel
@@ -16,7 +16,8 @@ def _normalize_hex_color(color: str | None) -> str | None:
     color = color.strip()
     if not color:
         return None
-    if len(color) == 7 and color.startswith("#") and all(c in "0123456789abcdefABCDEF" for c in color[1:]):
+    hex_digits = "0123456789abcdefABCDEF"
+    if len(color) == 7 and color.startswith("#") and all(c in hex_digits for c in color[1:]):
         return color.lower()
     raise ValueError("Invalid color")
 
@@ -38,7 +39,9 @@ async def get_tag_category(db: AsyncSession, slug: str) -> TagCategoryModel | No
     return result.scalar_one_or_none()
 
 
-async def create_tag_category(db: AsyncSession, slug: str, label: str, color: str | None = None) -> TagCategoryModel:
+async def create_tag_category(
+    db: AsyncSession, slug: str, label: str, color: str | None = None
+) -> TagCategoryModel:
     """Create a new tag category."""
     cat = TagCategoryModel(slug=slug, label=label, color=_normalize_hex_color(color))
     db.add(cat)

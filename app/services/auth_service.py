@@ -190,7 +190,9 @@ def _bearer_user(request: Request) -> CurrentUser | None:
     scheme, _, token = auth.partition(" ")
     if scheme.lower() != "bearer" or not token:
         return None
-    if secrets.compare_digest(token.strip(), settings.api_token):
+    # Compare bytes: ``compare_digest`` raises TypeError on a non-ASCII ``str``, which
+    # turned a crafted header into a 500 instead of a plain "not authenticated".
+    if secrets.compare_digest(token.strip().encode(), settings.api_token.encode()):
         return MACHINE_USER
     return None
 

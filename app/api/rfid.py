@@ -9,7 +9,7 @@ from app.database import get_db
 from app.schemas.rfid import RFIDResolveResponse, RFIDTagRead, RFIDTagUpsert
 from app.services import rfid_service
 from app.services.auth_service import CurrentUser, get_current_user
-from app.services.permissions import ensure_parent
+from app.services.permissions import can_view_media, ensure_parent
 
 router = APIRouter(prefix="/api/v1/rfid", tags=["rfid"])
 
@@ -20,10 +20,14 @@ async def list_rfid(
         None, description="true=only assigned, false=only unassigned, null=all"
     ),
     db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
 ):
     tags = await rfid_service.list_rfid_tags(db, assigned=assigned)
     out: list[RFIDTagRead] = []
     for t in tags:
+        # A child never sees the media of another owner (unassigned tags stay listed).
+        if getattr(t, "media", None) and not can_view_media(user, t.media):
+            continue
         out.append(
             RFIDTagRead(
                 uid=t.uid,
@@ -57,9 +61,12 @@ async def resolve_media(
     request: Request,
     uid: str,
     db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
 ):
     media = await rfid_service.resolve_media_for_rfid(db, uid=uid)
-    if not media:
+    # Out-of-scope media answers exactly like an unknown card (status and body),
+    # so a child cannot tell a hidden card from a non-existent one.
+    if not media or not can_view_media(user, media):
         raise HTTPException(404, detail="Tag RFID introuvable ou non associé")
 
     base = str(request.base_url).rstrip("/")

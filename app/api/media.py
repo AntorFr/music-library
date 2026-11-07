@@ -16,9 +16,9 @@ from app.schemas.media import (
     MediaSelectQueryOptions,
     MediaSelectQueryRequest,
     MediaSelectRead,
-    SelectionFallback,
     MediaUpdate,
     PaginatedResponse,
+    SelectionFallback,
 )
 from app.services import media_service
 from app.services.auth_service import CurrentUser, get_current_user
@@ -119,7 +119,9 @@ async def select_media(
     pairs = parse_qsl(request.url.query, keep_blank_values=False)
     parsed = parse_tag_filters_from_qsl(
         pairs,
-        reserved_keys={"search", "media_type", "provider", "random", "limit", "fallback", "exclude_ids"},
+        reserved_keys={
+            "search", "media_type", "provider", "random", "limit", "fallback", "exclude_ids",
+        },
     )
 
     # Collect exclude_ids from query (support repeated params) + explicit param
@@ -196,8 +198,16 @@ async def select_media_query(
                     "query": {
                         "all_of": [{"category": "owner", "values": ["papa"]}],
                         "any_of": [
-                            {"all_of": [{"category": "mood", "values": ["calm"]}], "any_of": [], "none_of": []},
-                            {"all_of": [{"category": "context", "values": ["evening"]}], "any_of": [], "none_of": []},
+                            {
+                                "all_of": [{"category": "mood", "values": ["calm"]}],
+                                "any_of": [],
+                                "none_of": [],
+                            },
+                            {
+                                "all_of": [{"category": "context", "values": ["evening"]}],
+                                "any_of": [],
+                                "none_of": [],
+                            },
                         ],
                         "none_of": [],
                     },

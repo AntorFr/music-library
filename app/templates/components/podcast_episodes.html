@@ -62,7 +62,8 @@
         </div>
       </div>
       <button class="btn btn-primary btn-sm"
-              onclick="playEpisode('{{ ep.uri }}')"
+              data-uri="{{ ep.uri }}"
+              onclick="playEpisode(this.dataset.uri)"
               title="Lire cet épisode">
         <i class="mdi mdi-play"></i>
       </button>

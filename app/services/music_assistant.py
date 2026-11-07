@@ -13,6 +13,7 @@ Uses the MA WebSocket API (same protocol as the official client).
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import urllib.parse
 import uuid
@@ -23,283 +24,22 @@ import websockets
 from websockets.asyncio.client import ClientConnection
 
 from app.config import settings
+from app.services.ma_helpers import (  # noqa: F401  (re-exported)
+    _episode_fetches,
+    _single_flight_episodes,
+    fetch_audiobook,
+    fetch_podcast_episodes,
+    normalize_chapters,
+    resolve_ma_provider_and_id,
+)
+from app.services.ma_models import (  # noqa: F401  (re-exported)
+    MAImage,
+    MAMediaItem,
+    MAPlayer,
+    MASearchResults,
+)
 
 logger = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Data classes for parsed MA responses
-# ---------------------------------------------------------------------------
-
-class MAImage:
-    """Represents an image attached to a media item."""
-
-    def __init__(self, data: dict[str, Any]) -> None:
-        self.type: str = data.get("type", "")  # thumb, fanart, logo…
-        self.path: str = data.get("path", "")
-        self.provider: str = data.get("provider", "")
-        self.remotely_accessible: bool = data.get("remotely_accessible", False)
-
-    def __repr__(self) -> str:
-        return f"<MAImage {self.type} provider={self.provider}>"
-
-
-class MAMediaItem:
-    """Parsed media item from Music Assistant."""
-
-    def __init__(self, data: dict[str, Any]) -> None:
-        self._raw = data
-        self.item_id: str = str(data.get("item_id", ""))
-        self.provider: str = data.get("provider", "")
-        self.name: str = data.get("name", "")
-        self.media_type: str = data.get("media_type", "")
-        self.uri: str = data.get("uri", "")
-        self.sort_name: str = data.get("sort_name", "")
-        self.available: bool = data.get("available", True)
-
-        # Metadata
-        metadata = data.get("metadata") or {}
-        self.description: str = metadata.get("description", "")
-        self.images: list[MAImage] = [
-            MAImage(img) for img in (metadata.get("images") or [])
-        ]
-        # Chapters (audiobooks, sometimes podcast episodes) — list of dicts
-        # with keys: position, name, start (sec), end (sec | None)
-        self.chapters: list[dict] = list(metadata.get("chapters") or [])
-
-        # Provider mappings (other providers where this item exists)
-        self.provider_mappings: list[dict] = data.get("provider_mappings", [])
-
-        # Type-specific fields
-        self.artists: list[dict] = data.get("artists", [])
-        self.album: dict | None = data.get("album")
-        self.duration: int = data.get("duration", 0)
-        self.owner: str = data.get("owner", "")
-
-        # Podcast episode-specific fields (present only when media_type == podcast_episode)
-        self.position: int = data.get("position", 0)
-        self.fully_played: bool | None = data.get("fully_played")
-        self.resume_position_ms: int | None = data.get("resume_position_ms")
-
-    @property
-    def artist_names(self) -> list[str]:
-        """Extract artist names from the artists list."""
-        return [a.get("name", "") for a in self.artists if a.get("name")]
-
-    @property
-    def artist_str(self) -> str:
-        """Comma-separated artist names."""
-        return ", ".join(self.artist_names)
-
-    @property
-    def album_name(self) -> str:
-        """Album name if available."""
-        if self.album:
-            return self.album.get("name", "")
-        return ""
-
-    @property
-    def thumb_image(self) -> MAImage | None:
-        """Return the first thumbnail image, if any."""
-        for img in self.images:
-            if img.type == "thumb":
-                return img
-        return self.images[0] if self.images else None
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serializable summary of the item."""
-        thumb = self.thumb_image
-        return {
-            "item_id": self.item_id,
-            "provider": self.provider,
-            "name": self.name,
-            "media_type": self.media_type,
-            "uri": self.uri,
-            "artists": self.artist_str,
-            "album": self.album_name,
-            "duration": self.duration,
-            "description": self.description,
-            "thumb_url": thumb.path if thumb else None,
-            "thumb_provider": thumb.provider if thumb else None,
-            "thumb_remotely_accessible": thumb.remotely_accessible if thumb else False,
-            "position": self.position,
-            "fully_played": self.fully_played,
-            "resume_position_ms": self.resume_position_ms,
-        }
-
-    def __repr__(self) -> str:
-        return f"<MAMediaItem '{self.name}' ({self.media_type}) uri={self.uri}>"
-
-
-class MAPlayer:
-    """Parsed player info from Music Assistant."""
-
-    def __init__(self, data: dict[str, Any]) -> None:
-        self._raw = data
-        self.player_id: str = data.get("player_id", "")
-        self.name: str = data.get("display_name", "") or data.get("name", "")
-        self.available: bool = data.get("available", False)
-        self.powered: bool = data.get("powered", False)
-        self.state: str = data.get("state", "")  # playing, paused, idle, off
-        self.volume_level: int = data.get("volume_level", 0)
-        self.type: str = data.get("type", "")
-        self.provider: str = data.get("provider", "")
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "player_id": self.player_id,
-            "name": self.name,
-            "available": self.available,
-            "powered": self.powered,
-            "state": self.state,
-            "volume_level": self.volume_level,
-            "type": self.type,
-            "provider": self.provider,
-        }
-
-    def __repr__(self) -> str:
-        return f"<MAPlayer '{self.name}' ({self.state})>"
-
-
-class MASearchResults:
-    """Parsed search results from Music Assistant."""
-
-    def __init__(self, data: dict[str, Any]) -> None:
-        self.artists: list[MAMediaItem] = [
-            MAMediaItem(i) for i in (data.get("artists") or [])
-        ]
-        self.albums: list[MAMediaItem] = [
-            MAMediaItem(i) for i in (data.get("albums") or [])
-        ]
-        self.tracks: list[MAMediaItem] = [
-            MAMediaItem(i) for i in (data.get("tracks") or [])
-        ]
-        self.playlists: list[MAMediaItem] = [
-            MAMediaItem(i) for i in (data.get("playlists") or [])
-        ]
-        self.radio: list[MAMediaItem] = [
-            MAMediaItem(i) for i in (data.get("radio") or [])
-        ]
-        self.audiobooks: list[MAMediaItem] = [
-            MAMediaItem(i) for i in (data.get("audiobooks") or [])
-        ]
-        self.podcasts: list[MAMediaItem] = [
-            MAMediaItem(i) for i in (data.get("podcasts") or [])
-        ]
-
-    @property
-    def all_items(self) -> list[MAMediaItem]:
-        """Flatten all results into a single list."""
-        return (
-            self.tracks + self.albums + self.playlists
-            + self.artists + self.radio + self.audiobooks + self.podcasts
-        )
-
-
-# ---------------------------------------------------------------------------
-# Addressing a local media row in Music Assistant
-# ---------------------------------------------------------------------------
-
-def resolve_ma_provider_and_id(item: Any) -> tuple[str | None, str | None]:
-    """(provider, item_id) to re-query Music Assistant about a local media row.
-
-    Prefer the ``source_uri``: it is the canonical MA URI (e.g. ``library://audiobook/29``),
-    so its scheme is the MA provider and the trailing segment is the item id — a
-    self-consistent pair. The stored ``provider`` column can be the *origin* provider
-    (audible/spotify) while ``ma_item_id`` is the *library* id; combining those two is wrong
-    and makes MA look up a non-existent item (``shows/88 not found``, ``ASIN 29 not present``).
-    Fall back to provider + ma_item_id only when the source_uri can't be parsed.
-
-    ``item`` is duck-typed: anything exposing ``source_uri``, ``provider`` and
-    ``metadata_extra`` (a :class:`~app.models.media.Media` row, in practice).
-    """
-    uri = getattr(item, "source_uri", "") or ""
-    if "://" in uri:
-        scheme, rest = uri.split("://", 1)
-        parts = rest.split("/", 1)
-        if len(parts) == 2 and parts[1]:
-            return scheme, parts[1]
-    provider = (getattr(item, "provider", "") or "").strip() or None
-    extra = getattr(item, "metadata_extra", None) or {}
-    item_id = (
-        str(extra["ma_item_id"])
-        if isinstance(extra, dict) and extra.get("ma_item_id")
-        else None
-    )
-    return provider, item_id
-
-
-# Episode fetches currently running, keyed by (provider, item_id). A provider-backed podcast
-# (e.g. Spotify) can take tens of seconds on a cold MA cache; clients that give up and retry
-# must not stack identical MA commands on top of the one still running.
-_episode_fetches: dict[tuple[str, str], asyncio.Task[list[MAMediaItem]]] = {}
-
-
-async def _single_flight_episodes(
-    ma: MusicAssistantClient, provider: str, item_id: str
-) -> list[MAMediaItem]:
-    """Join the running fetch for this podcast, or start one.
-
-    This is request coalescing, not a cache: the entry is dropped as soon as MA answers, so
-    the next request re-asks MA (resume positions stay fresh). The fetch runs in its own
-    task and callers await it through ``shield``: a caller that disconnects does not cancel
-    the fetch the other callers are waiting on.
-    """
-    key = (provider, item_id)
-    task = _episode_fetches.get(key)
-    if task is None:
-        task = asyncio.create_task(ma.get_podcast_episodes(item_id, provider))
-        _episode_fetches[key] = task
-        task.add_done_callback(lambda t: _episode_fetches.pop(key, None))
-    episodes = await asyncio.shield(task)
-    return list(episodes)  # each caller gets its own list
-
-
-async def fetch_podcast_episodes(
-    ma: MusicAssistantClient, item: Any
-) -> list[MAMediaItem]:
-    """Episodes of a local podcast row, in MA's own objects.
-
-    Callers serialise them their own way (HTMX template vs embedded-client JSON); what
-    they must NOT own is *how the item is addressed* — see
-    :func:`resolve_ma_provider_and_id`. Concurrent requests for the same podcast share one
-    MA command (see :func:`_single_flight_episodes`).
-    """
-    provider, item_id = resolve_ma_provider_and_id(item)
-    if not provider or not item_id:
-        ma_item = await ma.get_item_by_uri(getattr(item, "source_uri", "") or "")
-        provider, item_id = ma_item.provider, ma_item.item_id
-    return await _single_flight_episodes(ma, provider, item_id)
-
-
-async def fetch_audiobook(ma: MusicAssistantClient, item: Any) -> MAMediaItem:
-    """The MA audiobook behind a local row — carries chapters, resume position, duration."""
-    provider, item_id = resolve_ma_provider_and_id(item)
-    if provider and item_id:
-        return await ma.get_item("audiobook", item_id, provider)
-    return await ma.get_item_by_uri(getattr(item, "source_uri", "") or "")
-
-
-def normalize_chapters(ma_item: MAMediaItem) -> list[dict]:
-    """Chapters as plain dicts, sorted by position, with ``end``/``duration`` in seconds.
-
-    MA hands chapters over as raw dicts with stringy numbers; both surfaces need the same
-    arithmetic, so it happens once here.
-    """
-    chapters = []
-    for ch in ma_item.chapters:
-        start = float(ch.get("start", 0) or 0)
-        end = ch.get("end")
-        end_f = float(end) if end is not None else None
-        chapters.append({
-            "position": int(ch.get("position", 0) or 0),
-            "name": ch.get("name", "") or "",
-            "start": start,
-            "end": end_f,
-            "duration": (end_f - start) if end_f else None,
-        })
-    chapters.sort(key=lambda c: c["position"])
-    return chapters
 
 
 # ---------------------------------------------------------------------------
@@ -350,7 +90,11 @@ class MusicAssistantClient:
 
     @property
     def connected(self) -> bool:
-        return self._ws is not None and self._reader_task is not None and not self._reader_task.done()
+        return (
+            self._ws is not None
+            and self._reader_task is not None
+            and not self._reader_task.done()
+        )
 
     # --- Background reader ---
 
@@ -428,7 +172,9 @@ class MusicAssistantClient:
             # First message from server is ServerInfoMessage
             import json
             raw = await self._ws.recv()
-            self._server_info = json.loads(raw) if isinstance(raw, str) else json.loads(raw.decode())
+            self._server_info = (
+                json.loads(raw) if isinstance(raw, str) else json.loads(raw.decode())
+            )
             logger.info(
                 "Connected to MA server v%s (schema %s)",
                 self._server_info.get("server_version"),
@@ -448,7 +194,11 @@ class MusicAssistantClient:
                 # Read until auth response
                 while True:
                     raw_resp = await asyncio.wait_for(self._ws.recv(), timeout=10.0)
-                    resp = json.loads(raw_resp) if isinstance(raw_resp, str) else json.loads(raw_resp.decode())
+                    resp = (
+                        json.loads(raw_resp)
+                        if isinstance(raw_resp, str)
+                        else json.loads(raw_resp.decode())
+                    )
                     if resp.get("event"):
                         continue
                     if resp.get("message_id") == message_id:
@@ -473,10 +223,8 @@ class MusicAssistantClient:
         """Close the WebSocket connection."""
         if self._reader_task and not self._reader_task.done():
             self._reader_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._reader_task
-            except asyncio.CancelledError:
-                pass
         self._reader_task = None
         if self._ws:
             await self._ws.close()
@@ -517,10 +265,10 @@ class MusicAssistantClient:
 
         try:
             response = await asyncio.wait_for(fut, timeout=60.0)
-        except asyncio.TimeoutError:
+        except TimeoutError as exc:
             self._pending.pop(message_id, None)
             self._partial_results.pop(message_id, None)
-            raise TimeoutError(f"MA command '{command}' timed out after 60s")
+            raise TimeoutError(f"MA command '{command}' timed out after 60s") from exc
 
         if "error_code" in response:
             error_msg = response.get("details", response.get("error_code", "Unknown error"))
@@ -590,50 +338,50 @@ class MusicAssistantClient:
 
     # --- High-level: Library listings ---
 
+    async def _get_library(
+        self, media_type: str, search: str | None, limit: int | None
+    ) -> list[MAMediaItem]:
+        """List one media type from the MA library (single implementation)."""
+        result = await self._send_command(
+            f"music/{media_type}/library_items", search=search, limit=limit
+        )
+        return [MAMediaItem(i) for i in (result or [])]
+
     async def get_library_playlists(
         self, search: str | None = None, limit: int | None = None
     ) -> list[MAMediaItem]:
         """List playlists from the MA library."""
-        result = await self._send_command(
-            "music/playlists/library_items", search=search, limit=limit
-        )
-        return [MAMediaItem(i) for i in (result or [])]
+        return await self._get_library("playlists", search, limit)
 
     async def get_library_albums(
         self, search: str | None = None, limit: int | None = None
     ) -> list[MAMediaItem]:
         """List albums from the MA library."""
-        result = await self._send_command(
-            "music/albums/library_items", search=search, limit=limit
-        )
-        return [MAMediaItem(i) for i in (result or [])]
+        return await self._get_library("albums", search, limit)
 
     async def get_library_tracks(
         self, search: str | None = None, limit: int | None = None
     ) -> list[MAMediaItem]:
         """List tracks from the MA library."""
-        result = await self._send_command(
-            "music/tracks/library_items", search=search, limit=limit
-        )
-        return [MAMediaItem(i) for i in (result or [])]
+        return await self._get_library("tracks", search, limit)
 
     async def get_library_radios(
         self, search: str | None = None, limit: int | None = None
     ) -> list[MAMediaItem]:
         """List radio stations from the MA library."""
-        result = await self._send_command(
-            "music/radios/library_items", search=search, limit=limit
-        )
-        return [MAMediaItem(i) for i in (result or [])]
+        return await self._get_library("radios", search, limit)
 
     async def get_library_audiobooks(
         self, search: str | None = None, limit: int | None = None
     ) -> list[MAMediaItem]:
         """List audiobooks from the MA library."""
-        result = await self._send_command(
-            "music/audiobooks/library_items", search=search, limit=limit
-        )
-        return [MAMediaItem(i) for i in (result or [])]
+        return await self._get_library("audiobooks", search, limit)
+
+    async def get_library_podcasts(
+        self, search: str | None = None, limit: int | None = None
+    ) -> list[MAMediaItem]:
+        """List podcasts from the MA library."""
+        return await self._get_library("podcasts", search, limit)
 
     async def get_podcast_episodes(
         self, item_id: str, provider: str
@@ -682,15 +430,6 @@ class MusicAssistantClient:
     async def get_provider_configs(self) -> list[dict]:
         """Every configured provider instance, loaded or not (``status``, ``last_error``)."""
         return await self._send_command("config/providers") or []
-
-    async def get_library_podcasts(
-        self, search: str | None = None, limit: int | None = None
-    ) -> list[MAMediaItem]:
-        """List podcasts from the MA library."""
-        result = await self._send_command(
-            "music/podcasts/library_items", search=search, limit=limit
-        )
-        return [MAMediaItem(i) for i in (result or [])]
 
     # --- High-level: Players ---
 
