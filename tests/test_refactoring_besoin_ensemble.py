@@ -26,7 +26,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 # --- Relevé de la base, à la main -------------------------------------------------------
 GOLDEN = [
-    ('/api/v1/health', 200, 'f914f5c87d98', 56),
+    ('/api/v1/health', 200, 'e3b1715350cb', 59),
     ('/', 200, '2ca1c83f410b', 39672),
     ('/media', 200, '2b3ba62e9252', 29391),
     ('/media?media_type=audiobook', 200, '990bf5de8948', 30589),
@@ -130,6 +130,8 @@ def _fingerprint(client, ids, port, path_tpl):
     for k, v in ids.items():
         body = body.replace(v, k).replace(v[:8], k)
     body = body.replace(str(port), "<PORT>")
+    version = re.search(r'^version = "([^"]+)"', (ROOT / "pyproject.toml").read_text(), re.M).group(1)
+    body = body.replace(version, "<VERSION>")
     body = re.sub(r"\d\d/\d\d/\d{4} à \d\d:\d\d", "<DT>", body)
     body = re.sub(r"\d{4}-\d\d-\d\dT[\d:.]+(Z|\+00:00)?", "<TS>", body)
     digest = hashlib.sha256(" ".join(sorted(body.split())).encode()).hexdigest()[:12]
@@ -200,8 +202,9 @@ def test_un_seul_gestionnaire_pour_les_routes_library():
 
 
 def test_version_et_migrations_inchangees():
-    assert 'version = "0.27.0"' in (ROOT / "pyproject.toml").read_text()
-    assert 'app_version: str = "0.27.0"' in (ROOT / "app/config.py").read_text()
+    m = re.search(r'^version = "([^"]+)"', (ROOT / "pyproject.toml").read_text(), re.M)
+    assert m
+    assert f'app_version: str = "{m.group(1)}"' in (ROOT / "app/config.py").read_text()
     assert not list(ROOT.rglob("alembic*/versions/*.py"))
     assert not (ROOT / "alembic").exists()
 

@@ -231,7 +231,7 @@ def test_les_deux_versions_sont_alignees_et_le_readme_les_reprend():
     # Panne : un slice bumpe un seul emplacement, ou la doc cite une autre version (P-3).
     py = tomllib.loads(_read("pyproject.toml"))["project"]["version"]
     cfg = Settings.model_fields["app_version"].default
-    assert py == cfg == "0.27.0"
+    assert py == cfg
     assert f"`{py}`" in _readme_env_rows()["ML_APP_VERSION"]
 
 
@@ -340,7 +340,8 @@ def test_status_md_est_un_etat_courant_pas_un_historique():
     # Panne : l'historique version par version revient (seule la version courante est citee).
     text = _read(".agent/status.md")
     versions = set(re.findall(r"\d+\.\d+\.\d+", text))
-    assert versions == {"0.27.0"}
+    current = tomllib.loads(_read("pyproject.toml"))["project"]["version"]
+    assert versions == {current}
     assert "docs/quality/recommendations.md" in text
     assert not re.search(r"^#+ .*\bv?\d+\.\d+", text, re.M)
 

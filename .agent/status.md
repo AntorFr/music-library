@@ -2,7 +2,7 @@
 
 > MàJ : 2026-11-08
 
-**Version courante :** 0.27.0 (`pyproject.toml`, `app/config.py`). Historique des versions : tags git et notes de release.
+**Version courante :** 0.27.1 (`pyproject.toml`, `app/config.py`). Historique des versions : tags git et notes de release.
 
 **Lancer** (Python ≥ 3.12, dans un venv : `python3 -m venv .venv && . .venv/bin/activate`) :
 `pip install -e '.[dev]' && pytest` ; l'app sans MA :
@@ -15,6 +15,7 @@
 - `default_cover` est un chemin relatif ; la route de couverture par défaut ne résout que depuis `app/` : depuis la racine du dépôt comme dans l'image Docker (`WORKDIR /app`, fichier dans `/app/app/static/`), elle répond 500 sans `ML_DEFAULT_COVER=app/static/img/default_cover.jpg` (R-17).
 - Couper un module sans ré-exporter ses anciens chemins d'import casse les `monkeypatch` des tests ; `get_ma_client` reste défini dans `app/services/music_assistant.py`.
 - Jamais `ruff --unsafe-fixes`.
+- Aucun test ne fige le numéro de version : ils lisent `pyproject.toml`, donc le bump d'une release n'en casse aucun. La suite ne dépend d'aucune branche d'epic ; seul l'historique git des commits cités par les recommandations lui est nécessaire.
 
 **Vérifications encore ouvertes (en production) :**
 - [ ] Vérifier sur l'instance MA réelle que le dernier épisode d'un podcast arrive en tête (ordre déduit du code de MA, pas observé)
