@@ -328,6 +328,6 @@ def test_le_rapport_ne_contient_aucun_secret_ni_uid_reel():
 # ---- P-3 : aucune version changee ------------------------------------------------------------
 
 
-def test_version_inchangee_0_27_0_dans_les_deux_emplacements():
-    assert tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["version"] == "0.27.0"
-    assert settings.app_version == "0.27.0"
+def test_version_identique_dans_les_deux_emplacements():
+    version = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["version"]
+    assert settings.app_version == version

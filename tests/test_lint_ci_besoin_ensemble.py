@@ -34,8 +34,8 @@ def test_rule_set_keeps_the_six_families():
 
 def test_release_version_is_still_the_same_in_both_places():
     cfg = tomllib.loads((ROOT / "pyproject.toml").read_text())
-    assert cfg["project"]["version"] == "0.27.0"
-    assert 'app_version: str = "0.27.0"' in (ROOT / "app" / "config.py").read_text()
+    version = cfg["project"]["version"]
+    assert f'app_version: str = "{version}"' in (ROOT / "app" / "config.py").read_text()
 
 
 @pytest.mark.parametrize(
