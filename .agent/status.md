@@ -12,7 +12,7 @@
 
 **Pièges connus :**
 - Aucune migration Alembic : le schéma évolue dans `init_db`.
-- `default_cover` est un chemin relatif ; hors `app/` ou `/app`, la route de couverture par défaut répond 500.
+- `default_cover` est un chemin relatif ; la route de couverture par défaut ne résout que depuis `app/` : depuis la racine du dépôt comme dans l'image Docker (`WORKDIR /app`, fichier dans `/app/app/static/`), elle répond 500 sans `ML_DEFAULT_COVER=app/static/img/default_cover.jpg` (R-17).
 - Couper un module sans ré-exporter ses anciens chemins d'import casse les `monkeypatch` des tests ; `get_ma_client` reste défini dans `app/services/music_assistant.py`.
 - Jamais `ruff --unsafe-fixes`.
 

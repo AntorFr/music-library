@@ -16,7 +16,7 @@ mkdir -p data && ML_DATABASE_URL=sqlite+aiosqlite:///data/library.db python -m a
 curl localhost:8000/api/v1/health
 ```
 
-Run `pip install` before the first start: it fails once `data/` (git-ignored) exists next to `app/`. Run from the repository root (the `data/` paths are relative); the default cover (`ML_DEFAULT_COVER`, relative to the working directory) is then missing, so set `ML_DEFAULT_COVER=app/static/img/default_cover.jpg` or `GET /covers/<id>.jpg` for a media without cover answers 500. Copy [.env.example](.env.example) to `.env` to set `ML_*` values locally (it lists only the basic settings; the table below is complete).
+Run `pip install` before the first start: it fails once `data/` (git-ignored) exists next to `app/` (move `data/` aside, install, put it back). Run from the repository root (the `data/` paths are relative); the default cover (`ML_DEFAULT_COVER`, relative to the working directory) is missing from the repository root and from the Docker image alike, so set `ML_DEFAULT_COVER=app/static/img/default_cover.jpg` or `GET /covers/<id>.jpg` for a media without cover answers 500. Copy [.env.example](.env.example) to `.env` to set `ML_*` values locally (it lists only the basic settings; the table below is complete).
 
 ### Docker
 
@@ -25,7 +25,7 @@ docker build -t music-library .
 docker run -p 8000:8000 -p 8001:8001 music-library
 ```
 
-Ports: 8000 (full API and web frontend), 8001 (dedicated ESP API). A published image is available at `ghcr.io/antorfr/music-library`; see [docker-compose.yml](docker-compose.yml) for a ready-made service definition (mount `./data` on `/app/data`). Without that mount, data is lost when the container is removed.
+Ports: 8000 (full API and web frontend), 8001 (dedicated ESP API). A published image is available at `ghcr.io/antorfr/music-library`; see [docker-compose.yml](docker-compose.yml) for a ready-made service definition (mount `./data` on `/app/data`). Without that mount, data is lost when the container is removed. Add `-e ML_DEFAULT_COVER=app/static/img/default_cover.jpg` to `docker run` (or `environment:` in compose) until [R-17](docs/quality/recommendations.md) is arbitrated, otherwise a media without cover answers 500.
 
 ## Configuration
 
@@ -69,6 +69,8 @@ pip install -e '.[dev]'
 ruff check .
 pytest
 ```
+
+Run it in a git clone with its history: two tests check that the commits cited in `docs/quality/recommendations.md` exist.
 
 ## Versioning
 
