@@ -34,7 +34,7 @@ All settings are environment variables prefixed `ML_` (also read from a `.env` f
 | Variable | Meaning | Default | Required |
 |---|---|---|---|
 | `ML_APP_NAME` | Application name | `Music Library` | no |
-| `ML_APP_VERSION` | Version reported by `/health`; kept equal to the git tag (see Versioning) | `0.27.0` | no |
+| `ML_APP_VERSION` | Version reported by `/health`; kept equal to the git tag (see Versioning) | `0.27.1` | no |
 | `ML_DEBUG` | Debug mode | `false` | no |
 | `ML_DATABASE_URL` | SQLAlchemy database URL | `sqlite+aiosqlite:///data/library.db` | no |
 | `ML_COVERS_DIR` | Directory of stored covers | `data/covers` | no |
