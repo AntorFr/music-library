@@ -187,7 +187,8 @@ paragraph, a summary table (id, title, origin, recommendation, status), then
 entries grouped by theme in this order: security, behaviour kept as found,
 tooling and CI, documentation gaps, new functions. Within a theme, the entry the
 owner should look at first comes first. A final section "Applied" holds the
-critical fixes accepted under AD-6.
+fixes already applied, with their commit: the critical ones accepted under AD-6
+and any non-critical one made in passing. The scope does not widen for them.
 
 Each entry is `### R-n — title` with five fields: **Origin** (file and entry it
 comes from), **Today** (the observable behaviour), **Options** (at least two,
