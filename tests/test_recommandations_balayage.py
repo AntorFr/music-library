@@ -88,8 +88,8 @@ def test_banner_gaps_in_origin():
     origins = _all_origin_text()
     for doc in ("PLAN.md", "REQUIREMENTS.md"):
         txt = (ROOT / "docs" / doc).read_text(encoding="utf-8")
-        banner = [l for l in txt.splitlines() if l.startswith(">")]
-        bullets = [l[1:].strip()[2:].strip() for l in banner if l[1:].strip().startswith("- ")]
+        banner = [ln for ln in txt.splitlines() if ln.startswith(">")]
+        bullets = [ln[1:].strip()[2:].strip() for ln in banner if ln[1:].strip().startswith("- ")]
         assert bullets
         for b in bullets:
             key = b[:40]

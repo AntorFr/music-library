@@ -25,7 +25,7 @@ docker build -t music-library .
 docker run -p 8000:8000 -p 8001:8001 music-library
 ```
 
-Ports: 8000 (full API and web frontend), 8001 (dedicated ESP API). A published image is available at `ghcr.io/antorfr/music-library`; see [docker-compose.yml](docker-compose.yml) for a ready-made service definition (mount `./data` on `/app/data`).
+Ports: 8000 (full API and web frontend), 8001 (dedicated ESP API). A published image is available at `ghcr.io/antorfr/music-library`; see [docker-compose.yml](docker-compose.yml) for a ready-made service definition (mount `./data` on `/app/data`). Without that mount, data is lost when the container is removed.
 
 ## Configuration
 
@@ -79,4 +79,4 @@ On each release (tag `vX.Y.Z[-suffix]`), `version` in [pyproject.toml](pyproject
 - [ARCHITECTURE.md](ARCHITECTURE.md): organs and durable decisions.
 - [docs/adr/](docs/adr/): architecture decision records.
 - [docs/AUTH.md](docs/AUTH.md): authentication and roles.
-- [docs/quality/](docs/quality/): coverage and security review of the quality pass.
+- [docs/quality/](docs/quality/): coverage, security review and recommendations (to be arbitrated) of the quality pass.

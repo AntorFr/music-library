@@ -1,6 +1,6 @@
 # Status — Music Library
 
-> MàJ : 2026-11-06
+> MàJ : 2026-11-08
 
 **Version courante :** 0.27.0 (`pyproject.toml`, `app/config.py`). Historique des versions : tags git et notes de release.
 
@@ -23,4 +23,4 @@
 - [ ] MA : le compte Spotify `spotify--yPK3Sfsf` est désactivé (login en échec) ; repasser les médias des adultes encore en `library://` par le bloc « Compte Spotify »
 - [ ] HA : ajouter `music_library_token` dans `secrets.yaml` sur la box, puis reload
 
-**Renvoi :** recommandations et backlog dans `docs/quality/recommendations.md` (fichier créé par la tranche suivante).
+**Reste :** les 42 recommandations (R-1…R-42) de `docs/quality/recommendations.md` attendent l'arbitrage de Monsieur ; aucune n'est appliquée hors les 4 correctifs `applied`. Le backlog d'évolutions y est versé (R-41, R-42).
