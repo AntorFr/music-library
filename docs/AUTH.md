@@ -34,7 +34,9 @@ Garde-fous côté enfant :
 - la suppression définitive (`hard=true`) est réservée aux parents (l'enfant
   ne fait que du soft delete, réversible) ;
 - les médias des autres répondent **404** (pas de sondage d'existence) ;
-- gestion des tags/catégories, RFID et import MA global : **parents uniquement** (403).
+- gestion des tags/catégories, écritures RFID (liaison d'une carte à un média, `PUT /api/v1/rfid/<uid>`), pages Réglages et bloc « Compte Spotify » : **parents uniquement** (403) ;
+- l'import depuis Music Assistant (`POST /api/v1/ma/import`, `POST /browse/import`) reste **ouvert aux enfants** : le média importé reçoit d'office leur tag `owner` ;
+- lecture RFID (`GET /api/v1/rfid`, `/rfid/<uid>/media`) : filtrée comme le reste, un enfant ne voit pas les cartes des médias des autres (la liste les omet, la résolution répond 404 comme pour une carte inconnue).
 
 ## Variables d'environnement
 
@@ -48,14 +50,31 @@ Garde-fous côté enfant :
 | `ML_SESSION_SECRET` | Signature du cookie de session (stable en prod) |
 | `ML_API_TOKEN` | Bearer machine (Home Assistant) → accès niveau parent |
 
-⚠️ Les quatre `ML_OIDC_*` vont ensemble : si l'un manque, l'app tourne en
-**mode dev** — aucune authentification, chaque requête agit en parent.
+⚠️ Les quatre `ML_OIDC_ISSUER`, `ML_OIDC_CLIENT_ID`, `ML_OIDC_CLIENT_SECRET` et
+`ML_OIDC_REDIRECT_URI` vont ensemble : si l'un manque, l'app tourne en
+**mode dev** — aucune authentification, chaque requête agit en parent
+(utilisateur `dev`), et le bearer `ML_API_TOKEN` n'est pas examiné.
+`ML_OIDC_ADMIN_GROUP` n'en fait pas partie.
+
+## Jeton et cookies
+
+- **Jeton machine** : `Authorization: Bearer <ML_API_TOKEN>` donne l'identité
+  parent `api-token`. Vide, `ML_API_TOKEN` désactive le bearer. Ordre de
+  résolution : mode dev, puis bearer, puis session.
+- **Cookie de session** (Starlette `SessionMiddleware`) : signé avec
+  `ML_SESSION_SECRET` (à défaut, clé aléatoire par processus : les sessions
+  sautent au redémarrage), `SameSite=Lax`, `Secure` dès que l'OIDC est
+  configuré, durée 30 jours. Il porte nom d'utilisateur, nom affiché, rôle
+  et groupes, relus à chaque login.
+- **Cookie `ml_owner`** : profil choisi sur la page Écouter, posé par le
+  navigateur (1 an), valeur encodée en URL. Simple préférence d'affichage,
+  il n'accorde aucun droit.
 
 ## Surfaces
 
 - **App principale (port 8000)** : tout (UI + `/api/v1`) exige une session OIDC
   ou le bearer `ML_API_TOKEN`. Exemptions : `/auth/*`, `/static/*`, `/covers/*`,
-  `/manifest.webmanifest`, `/api/v1/health`.
+  `/manifest.webmanifest`, `/favicon.ico`, `/api/v1/health`.
 - **App ESP (port 8001)** : aucune auth (réseau interne, clients embarqués —
   une redirection 302 vers l'IdP les casserait).
 

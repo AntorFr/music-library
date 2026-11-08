@@ -35,10 +35,10 @@ d'épisodes de podcast.
 
 Fichiers principaux :
 
-- `app/services/music_assistant.py` : client WebSocket, parsing des objets,
+- `app/services/music_assistant.py` : client WebSocket, parsing des objets (classes dans `ma_models.py`, aides pures dans `ma_helpers.py`, ré-exportées),
   URLs d'images, commandes haut niveau.
 - `app/api/music_assistant.py` : API JSON `/api/v1/ma/*`.
-- `app/api/views.py` : browse/import MA, lecture depuis les pages média,
+- `app/api/views/` (paquet ; `browse.py`, `media_items.py`…) : browse/import MA, lecture depuis les pages média,
   épisodes de podcast, chapitres de livres audio, liste des players.
 - `app/api/system.py` : `/api/v1/health/ma`.
 - `tests/test_music_assistant_client.py` : test de non-régression sur les
@@ -76,7 +76,7 @@ n'existe pas (`shows/88 not found`, `ASIN 29 not present`). La résolution passe
 par `source_uri`.
 
 `app/services/music_assistant.py` porte les fonctions partagées par les deux surfaces
-(pages HTMX `app/api/views.py` et API embarquée `app/api/quick.py`) — elles n'écrivent
+(pages HTMX `app/api/views/` et API embarquée `app/api/quick.py`) — elles n'écrivent
 plus que leur propre sérialisation :
 
 | Fonction | Rôle |

@@ -1,46 +1,26 @@
 # Status — Music Library
 
-> MàJ : 2026-09-30
+> MàJ : 2026-11-08
 
-**État :** v0.26.0 — la fiche d'un podcast / playlist / album Spotify a un bloc
-« Compte Spotify » (parents) : il épingle le média sur un compte MA en réécrivant
-`source_uri` en URI d'instance, après avoir vérifié que ce compte renvoie du contenu.
-Motif : en `library://`, MA tire un compte au hasard, compte mort compris → 0 épisode.
-Avant : v0.25.0 — `/children?keepalive=1` — un podcast Spotify lent (43 s à froid
-côté MA, cas Laylo) n'éjecte plus la tablette : espaces envoyés toutes les 2 s puis la page ;
-et les demandes identiques en vol partagent une seule commande MA (pas de cache). Avant :
-v0.24.0 — les épisodes de podcast sortent du plus récent au plus
-ancien — API dashboard et fiche web ; les chapitres de livres gardent l'ordre de
-lecture. Avant : v0.23.1 — corrige un bug introduit par la v0.22.1 : un profil
-accentué (« Sébastien ») revenait en « n'existe plus » à chaque retour sur
-Écouter, le cookie étant relu encodé (`S%C3%A9bastien`). Et nouvelle icône, alignée sur la charte Home Assistant :
-même silhouette de maison que HA / Music Assistant / ESPHome (#18BCF2, glyphe
-#F2F4F9, aucun dégradé), avec trois barres centrées pour glyphe. La géométrie
-est relevée sur les pixels de l'icône officielle — écart mesuré nul. La pochette de remplacement reprend le même glyphe, en sourdine, et sort du même script en SVG et en JPEG. Avant :
-v0.22.1, refonte nav et UI (« v2 ») et correctif de persistance du lanceur (profil et enceinte tenaient dans `localStorage` et
-étaient perdus à chaque retour par le menu). Le menu passe de **8 entrées à
-4** : Écouter (le lanceur, devenu la racine), Catalogue, Ajouter (= la page
-Music Assistant, avec la saisie manuelle en modale), Réglages (Tags + RFID +
-Système en onglets, parents uniquement). Supprimées : la page de stats qui
-servait d'accueil, et la page Lecteurs qui listait les enceintes sans un seul
-bouton. Les filtres du catalogue passent du mur de `<select>` à des pastilles
-qui sont des liens (chaque état de filtre est une URL). Enfin, la **barre de
-lecture** branche l'API de contrôle MA — qui existait depuis les écrans
-embarqués mais que l'interface web n'appelait jamais. 108 tests verts.
+**Version courante :** 0.27.0 (`pyproject.toml`, `app/config.py`). Historique des versions : tags git et notes de release.
 
-**Prochaines étapes :**
-- [ ] Vérifier sur l'instance MA réelle que le dernier épisode arrive bien en
-      tête (ordre déduit du code source de MA, pas observé)
-- [ ] Vérifier dans le navigateur : la barre de lecture (sondage, seek, volume)
-      et la persistance profil/enceinte après un aller-retour par le menu
-- [ ] Vérifier une vraie lecture sur enceinte d'un média épinglé sur un compte
-      (liste d'épisodes vérifiée en réel, lecture pas encore)
-- [ ] MA : compte Spotify `spotify--yPK3Sfsf` désactivé (login en échec) ; les
-      médias des enfants sont épinglés sur Maison. Reste à repasser ceux des
-      adultes encore en `library://` via le nouveau bloc « Compte Spotify ».
-- [ ] HA : ajouter `music_library_token` dans secrets.yaml sur la box + reload
-- [ ] `media/form.html` garde ses branches `{% if item %}` alors qu'il ne sert
-      plus que l'édition — nettoyage cosmétique, sans effet visible
-- [ ] Doublons restants jugés inoffensifs : 6 méthodes `get_library_*` + 6
-      routes REST `/library/<type>` ; `logo.svg` = `favicon.svg`
-- [ ] Backlog : voir TODO.md (recherche floue…)
+**Lancer** (Python ≥ 3.12, dans un venv : `python3 -m venv .venv && . .venv/bin/activate`) :
+`pip install -e '.[dev]' && pytest` ; l'app sans MA :
+`ML_DATABASE_URL=sqlite+aiosqlite:///data/library.db python -m app.server`
+(ports 8000 app, 8001 API ESP), puis `curl localhost:8000/api/v1/health`.
+`ruff check .` doit rester propre (CI sur chaque PR vers `main`).
+
+**Pièges connus :**
+- Aucune migration Alembic : le schéma évolue dans `init_db`.
+- `default_cover` est un chemin relatif ; la route de couverture par défaut ne résout que depuis `app/` : depuis la racine du dépôt comme dans l'image Docker (`WORKDIR /app`, fichier dans `/app/app/static/`), elle répond 500 sans `ML_DEFAULT_COVER=app/static/img/default_cover.jpg` (R-17).
+- Couper un module sans ré-exporter ses anciens chemins d'import casse les `monkeypatch` des tests ; `get_ma_client` reste défini dans `app/services/music_assistant.py`.
+- Jamais `ruff --unsafe-fixes`.
+
+**Vérifications encore ouvertes (en production) :**
+- [ ] Vérifier sur l'instance MA réelle que le dernier épisode d'un podcast arrive en tête (ordre déduit du code de MA, pas observé)
+- [ ] Vérifier dans le navigateur : la barre de lecture (sondage, seek, volume) et la persistance profil/enceinte après un aller-retour par le menu
+- [ ] Vérifier une vraie lecture sur enceinte d'un média épinglé sur un compte Spotify (liste d'épisodes vérifiée en réel, lecture pas encore)
+- [ ] MA : le compte Spotify `spotify--yPK3Sfsf` est désactivé (login en échec) ; repasser les médias des adultes encore en `library://` par le bloc « Compte Spotify »
+- [ ] HA : ajouter `music_library_token` dans `secrets.yaml` sur la box, puis reload
+
+**Reste :** les 42 recommandations (R-1…R-42) de `docs/quality/recommendations.md` attendent l'arbitrage de Monsieur ; aucune n'est appliquée hors les 4 correctifs `applied`. Le backlog d'évolutions y est versé (R-41, R-42).
