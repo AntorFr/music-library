@@ -284,3 +284,39 @@ empty one. The absence of Alembic migrations is listed in « Comportements
 douteux conservés » as a finding for the recommendations slice. (AD-5 above says
 « Alembic migrations are not rewritten »: there are none; the rule stands for
 any that appear.)
+
+### AD-preuve-tests-1 — The suite is declared and attested; the forge does not play it
+
+The chain's rule `tests-attestes` applies. `.sdlc.yaml` declares `tests:` (`commande`,
+`rapport`, `format: junit`, `delai`, and the local level `local`); `attester --publier`
+plays the suite and posts the `tests-complets` status on the commit. This replaces AD-4:
+`ci.yml` is removed (no workflow plays the suite on push or pull request), and
+`docker-publish.yml` builds the image only on a `v*` tag, after an `attestation` job that
+requires `tests-complets` green on the tagged commit or on a parent of the same tree.
+
+- **Suite.** `scripts/suite-attestee.sh` installs the project in a throwaway virtualenv and
+  runs `pytest` with a JUnit report (`resultats.xml`, git-ignored). `ruff check .` stays
+  part of the suite through its existing test (`test_ruff_check_is_silent_on_the_repository`),
+  so it appears in the report under its own name. The suite needs a clone with history
+  (two tests read cited commits). The suite has no slow class: the local level
+  (`scripts/suite-locale.sh`) runs the same suite.
+- **Triggers of the image.** Tag push `v*` and `release: published` (its ref is the tag),
+  each guarded by `startsWith(github.ref, 'refs/tags/v')`. Removed: push to `main` (the
+  `:main` tag), manual dispatch. `:latest` still comes with a published release.
+- **Tests that pinned `ci.yml`** (`test_ci_workflow.py`, the CI cases of
+  `test_lint_ci_besoin_ensemble.py`, `test_doc_besoin_ensemble.py`, `test_doc_readme.py`)
+  now pin the new rule: no suite-playing workflow, the declaration, the attestation job.
+  The case that pinned `docker-publish.yml` on a `main` push
+  (`test_image_publish_workflow_still_triggers_on_main_and_tags`) is rewritten too: tag `v*`
+  only (plus `release: published`), behind the attestation job. No other test changes.
+- **Documents that cited `ci.yml`.** AD-doc-1 and AD-lint-ci-1 (which extended AD-4) lose
+  their source: the commands the README names are now those of `.sdlc.yaml`
+  (`tests.commande` and `tests.local`) and of the two scripts they point to, plus
+  `ruff check .` (run by the suite). `test_doc_besoin_ensemble.py` reads that declaration
+  instead of the `run:` steps. The « Known gaps » paragraph about `ci.yml` is rewritten to say
+  the suite is attested, not played by the forge. A test pins that `CLAUDE.md` states the
+  rule (it names `.sdlc.yaml` and the attestation).
+
+*Rejected:* keeping `ci.yml` as a second proof — two proofs diverge, and the forge would
+play the suite the chain no longer trusts it to play. *Rejected:* an `if` on the
+attestation instead of a `needs:` job — a skipped job reads as green.
