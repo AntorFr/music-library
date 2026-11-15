@@ -9,8 +9,8 @@ Plan (besoin -> cas -> preuve)
 - B-3 variables  : chaque champ de Settings (ML_*) figure dans le tableau du README, avec
                    son defaut ; aucune lecture d'environnement cachee dans app/ ;
                    aucune variable du tableau n'est inconnue du code (exclusion).
-- B-3/P-1 CI     : chaque commande `run` de ci.yml est nommee dans le README ; le README
-                   lie ci.yml.
+- B-3/P-1 CI     : la suite declaree (.sdlc.yaml) et ses scripts sont nommes dans le README ;
+                   le README lie .sdlc.yaml.
 - B-8 version    : README lie CLAUDE.md et nomme pyproject.toml et app/config.py ;
                    pyproject.version == app_version == defaut documente == status.md.
 - AD-3 decisions: section « Durable decisions » ; un ADR par entree et pas d'ADR hors
@@ -192,29 +192,27 @@ def test_le_defaut_documente_est_le_defaut_du_code(var, literal):
 # --------------------------------------------------------------------------- B-3 / P-1 CI
 
 
-def test_le_readme_nomme_chaque_commande_que_ci_yml_execute():
-    # Panne : ci.yml change ou le README derive ; ici les commandes litterales de la CI.
-    ci = yaml.safe_load(_read(".github/workflows/ci.yml"))
-    runs = [
-        step["run"].strip()
-        for job in ci["jobs"].values()
-        for step in job["steps"]
-        if "run" in step
-    ]
-    assert runs == ["pip install -e '.[dev]'", "ruff check .", "pytest"]
+def test_le_readme_nomme_la_suite_declaree_et_ses_commandes():
+    # Panne : .sdlc.yaml change ou le README derive ; ici la declaration litterale.
+    tests = yaml.safe_load(_read(".sdlc.yaml"))["tests"]
+    assert tests["commande"] == "scripts/suite-attestee.sh"
     readme = _read("README.md")
-    for cmd in runs:
+    assert tests["commande"] in readme and tests["local"] in readme
+    script = _read(tests["commande"])
+    assert "-e '.[dev]'" in script and "pytest" in script
+    for cmd in ("pip install -e '.[dev]'", "pytest"):
         assert cmd in readme, cmd
 
 
-def test_le_readme_lie_ci_yml():
-    assert ".github/workflows/ci.yml" in LINK.findall(_read("README.md"))
+def test_le_readme_lie_sdlc_yaml():
+    assert ".sdlc.yaml" in LINK.findall(_read("README.md"))
 
 
-def test_le_readme_nomme_les_commandes_dans_l_ordre_de_la_ci():
+def test_le_readme_nomme_les_commandes_dans_l_ordre_de_la_suite():
     readme = _read("README.md")
-    i = readme.index("ruff check .")
-    assert readme.index("pip install -e '.[dev]'", readme.index("## Lint")) < i < readme.index("pytest", i)
+    start = readme.index("## Lint")
+    i = readme.index("pip install -e '.[dev]'", start)
+    assert i < readme.index("pytest", i)
 
 
 # --------------------------------------------------------------------------- B-8 versionnage

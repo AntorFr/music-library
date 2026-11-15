@@ -76,21 +76,24 @@ def test_pytest_exits_zero_on_intact_assertion(tmp_path):
     assert r.returncode == 0
 
 
-def test_ci_workflow_fires_on_pull_request_to_main_and_runs_both_checks():
-    ci = yaml.safe_load((ROOT / ".github" / "workflows" / "ci.yml").read_text())
-    trigger = ci.get("on", ci.get(True))
-    assert trigger == {"pull_request": {"branches": ["main"]}}
-    runs = [s["run"].strip() for j in ci["jobs"].values() for s in j["steps"] if "run" in s]
-    assert "ruff check ." in runs and "pytest" in runs
+def test_no_ci_workflow_plays_the_suite():
+    assert not (ROOT / ".github" / "workflows" / "ci.yml").exists()
+    for path in (ROOT / ".github" / "workflows").glob("*.y*ml"):
+        text = path.read_text()
+        assert "pull_request" not in text, path.name
+        assert "pytest" not in text and "ruff check" not in text, path.name
 
 
-def test_ci_checks_cannot_be_bypassed_even_as_raw_text():
-    text = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
-    assert "continue-on-error" not in text
-    assert "|| true" not in text and "||true" not in text
+def test_suite_is_declared_for_attestation():
+    tests = yaml.safe_load((ROOT / ".sdlc.yaml").read_text())["tests"]
+    assert tests["commande"] == "scripts/suite-attestee.sh"
+    assert tests["local"]
 
 
-def test_image_publish_workflow_still_triggers_on_main_and_tags():
+def test_image_publish_workflow_triggers_on_v_tags_only_behind_attestation():
     wf = yaml.safe_load((ROOT / ".github" / "workflows" / "docker-publish.yml").read_text())
     trigger = wf.get("on", wf.get(True))
-    assert trigger["push"]["branches"] == ["main"]
+    assert trigger["push"] == {"tags": ["v*"]}
+    assert "branches" not in trigger["push"]
+    assert "workflow_dispatch" not in trigger
+    assert wf["jobs"]["build-and-push"]["needs"] == "attestation"

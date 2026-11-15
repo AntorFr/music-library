@@ -1,14 +1,14 @@
 # Status — Music Library
 
-> MàJ : 2026-11-08
+> MàJ : 2026-11-15
 
-**Version courante :** 0.27.1 (`pyproject.toml`, `app/config.py`). Historique des versions : tags git et notes de release.
+**Version courante :** 0.28.0 (`pyproject.toml`, `app/config.py`). Historique des versions : tags git et notes de release.
 
 **Lancer** (Python ≥ 3.12, dans un venv : `python3 -m venv .venv && . .venv/bin/activate`) :
-`pip install -e '.[dev]' && pytest` ; l'app sans MA :
+`scripts/suite-locale.sh` (suite entière, venv jetable ; déclarée dans `.sdlc.yaml`, attestée par `attester --publier`, aucun workflow ne la joue) ; l'app sans MA :
 `ML_DATABASE_URL=sqlite+aiosqlite:///data/library.db python -m app.server`
 (ports 8000 app, 8001 API ESP), puis `curl localhost:8000/api/v1/health`.
-`ruff check .` doit rester propre (CI sur chaque PR vers `main`).
+`ruff check .` doit rester propre (couvert par la suite). L'image Docker ne se construit que sur un tag `v*` attesté.
 
 **Pièges connus :**
 - Aucune migration Alembic : le schéma évolue dans `init_db`.

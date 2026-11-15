@@ -29,12 +29,12 @@ Ports: 8000 (full API and web frontend), 8001 (dedicated ESP API). A published i
 
 ## Configuration
 
-All settings are environment variables prefixed `ML_` (also read from a `.env` file). None is required: every one has a default suited to local development.
+All settings are environment variables prefixed `ML_` (also read from a `.env` file). None is required: every one has a default suited to local development, except `ML_DEFAULT_COVER` (see the note in the Local section: its default answers 500 for a media without cover).
 
 | Variable | Meaning | Default | Required |
 |---|---|---|---|
 | `ML_APP_NAME` | Application name | `Music Library` | no |
-| `ML_APP_VERSION` | Version reported by `/health`; kept equal to the git tag (see Versioning) | `0.27.1` | no |
+| `ML_APP_VERSION` | Version reported by `/health`; kept equal to the git tag (see Versioning) | `0.28.0` | no |
 | `ML_DEBUG` | Debug mode | `false` | no |
 | `ML_DATABASE_URL` | SQLAlchemy database URL | `sqlite+aiosqlite:///data/library.db` | no |
 | `ML_COVERS_DIR` | Directory of stored covers | `data/covers` | no |
@@ -62,13 +62,16 @@ The four `ML_OIDC_ISSUER`, `ML_OIDC_CLIENT_ID`, `ML_OIDC_CLIENT_SECRET` and `ML_
 
 ## Lint and test
 
-The CI ([ci.yml](.github/workflows/ci.yml)) runs, in this order:
+The suite is declared in [.sdlc.yaml](.sdlc.yaml) and attested, not played by the forge: no workflow runs it on a push or a pull request. `scripts/suite-attestee.sh` (the whole suite) and `scripts/suite-locale.sh` (the local level, the same suite) install the project in a throwaway virtualenv and run:
 
 ```
 pip install -e '.[dev]'
-ruff check .
 pytest
 ```
+
+`ruff check .` is part of the suite (`test_ruff_check_is_silent_on_the_repository`). `attester --publier` posts the `tests-complets` status on the commit; `docker-publish.yml` builds the image on a `v*` tag only once that status is green.
+
+`attester` is a tool of the SDLC chain (not part of this repository): it plays the declared suite on a clean checkout of a commit and posts the status. Without the chain, run `scripts/suite-locale.sh`. Both scripts run `pip install -e` and fail once the git-ignored `data/` exists next to `app/` (see the Local section): move `data/` aside first.
 
 Run it in a git clone with its history: two tests check that the commits cited in `docs/quality/recommendations.md` exist.
 

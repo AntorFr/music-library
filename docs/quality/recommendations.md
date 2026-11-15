@@ -283,7 +283,7 @@ Written last, from the finished reports of the quality pass (`docs/quality/cover
 
 ### R-29 — Pin the GitHub Actions by commit SHA
 
-- **Origin**: AD-4 and the lint/CI slice (`ARCHITECTURE.md`); `.github/workflows/ci.yml`, `docker-publish.yml`
+- **Origin**: AD-4 and the lint/CI slice (`ARCHITECTURE.md`); `.github/workflows/docker-publish.yml` (`ci.yml` removed by AD-preuve-tests-1)
 - **Today**: Actions are referenced by tag (`actions/checkout@v4`, `docker/build-push-action@v5`...); a moved tag changes what runs.
 - **Options**: (1) Leave as is. (2) Pin each action by SHA with the tag in a comment. (3) Pin by SHA and let Dependabot update them.
 - **Recommendation**: Option 3: pinning without updates goes stale.

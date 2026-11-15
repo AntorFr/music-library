@@ -56,12 +56,14 @@ def test_no_environ_read_outside_settings_is_missing_from_table():
     assert [v for v in found if v not in rows] == []
 
 
-def test_ci_run_commands_appear_verbatim_in_readme_in_order():
-    wf = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
-    runs = [s["run"] for j in wf["jobs"].values() for s in j["steps"] if "run" in s]
-    assert runs
+def test_suite_commands_appear_verbatim_in_readme_in_order():
+    decl = yaml.safe_load((ROOT / ".sdlc.yaml").read_text(encoding="utf-8"))["tests"]
+    for key in ("commande", "local"):
+        assert decl[key] in README, decl[key]
+    script = (ROOT / decl["commande"]).read_text(encoding="utf-8")
+    assert "-e '.[dev]'" in script and "pytest" in script
     pos = -1
-    for cmd in runs:
+    for cmd in ("pip install -e '.[dev]'", "pytest"):
         i = README.find(cmd, pos + 1)
         assert i > pos, f"{cmd!r} missing or out of order"
         pos = i
