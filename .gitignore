@@ -8,3 +8,4 @@ app/static/css/Media.ini
 *.egg-info/
 dist/
 build/
+resultats.xml

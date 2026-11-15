@@ -62,13 +62,14 @@ The four `ML_OIDC_ISSUER`, `ML_OIDC_CLIENT_ID`, `ML_OIDC_CLIENT_SECRET` and `ML_
 
 ## Lint and test
 
-The CI ([ci.yml](.github/workflows/ci.yml)) runs, in this order:
+The suite is declared in [.sdlc.yaml](.sdlc.yaml) and attested, not played by the forge: no workflow runs it on a push or a pull request. `scripts/suite-attestee.sh` (the whole suite) and `scripts/suite-locale.sh` (the local level, the same suite) install the project in a throwaway virtualenv and run:
 
 ```
 pip install -e '.[dev]'
-ruff check .
 pytest
 ```
+
+`ruff check .` is part of the suite (`test_ruff_check_is_silent_on_the_repository`). `attester --publier` posts the `tests-complets` status on the commit; `docker-publish.yml` builds the image on a `v*` tag only once that status is green.
 
 Run it in a git clone with its history: two tests check that the commits cited in `docs/quality/recommendations.md` exist.
 

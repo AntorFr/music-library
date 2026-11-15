@@ -1,16 +1,12 @@
 name: Build & Publish Docker Image
 
 on:
-  # Build on every push to main (tags :main)
-  # Build on tag push v* (tags :x.y.z, :x.y, :x)
+  # Image built on a v* tag only (tags :x.y.z, :x.y, :x), behind the attestation job.
   push:
-    branches: [main]
     tags: ['v*']
-  # Build + tag on release (tags :latest, :x.y.z, :x.y, :x)
+  # Release published: its ref is the tag; adds :latest.
   release:
     types: [published]
-  # Manual trigger
-  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -21,7 +17,36 @@ permissions:
   packages: write
 
 jobs:
+  # The suite is not played here: `attester --publier` posts the `tests-complets` status.
+  attestation:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      statuses: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Require tests-complets on this content
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          arbre=$(git rev-parse 'HEAD^{tree}')
+          for c in $(git rev-list --parents -n 1 HEAD); do
+            [ "$(git rev-parse "$c^{tree}")" = "$arbre" ] || continue
+            st=$(gh api "repos/$GITHUB_REPOSITORY/commits/$c/status" \
+              --jq '.statuses[] | select(.context == "tests-complets") | .state + " " + .description' | head -1)
+            [ "${st%% *}" = success ] && { echo "Attestation sur $c : ${st#* }"; exit 0; }
+          done
+          echo "::error::Pas d'attestation tests-complets sur ce contenu : attester --publier, puis relancer."
+          exit 1
+
   build-and-push:
+    needs: attestation
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
 
     steps:
@@ -52,8 +77,6 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            # On push to main → :main
-            type=ref,event=branch
             # On release v0.5.0-beta → :0.5.0-beta, :0.5, :0
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
