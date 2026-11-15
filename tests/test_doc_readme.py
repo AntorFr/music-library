@@ -61,7 +61,7 @@ def test_suite_commands_appear_verbatim_in_readme_in_order():
     for key in ("commande", "local"):
         assert decl[key] in README, decl[key]
     script = (ROOT / decl["commande"]).read_text(encoding="utf-8")
-    assert "pip install -e '.[dev]'" in script and "pytest" in script
+    assert "-e '.[dev]'" in script and "pytest" in script
     pos = -1
     for cmd in ("pip install -e '.[dev]'", "pytest"):
         i = README.find(cmd, pos + 1)

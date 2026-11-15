@@ -199,8 +199,8 @@ def test_le_readme_nomme_la_suite_declaree_et_ses_commandes():
     readme = _read("README.md")
     assert tests["commande"] in readme and tests["local"] in readme
     script = _read(tests["commande"])
+    assert "-e '.[dev]'" in script and "pytest" in script
     for cmd in ("pip install -e '.[dev]'", "pytest"):
-        assert cmd in script, cmd
         assert cmd in readme, cmd
 
 

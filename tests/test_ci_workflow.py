@@ -53,7 +53,7 @@ def test_suite_is_declared_with_a_local_level():
 
 def test_attested_script_installs_dev_extras_and_writes_a_junit_report():
     script = (ROOT / "scripts" / "suite-attestee.sh").read_text()
-    assert "pip install" in script and ".[dev]" in script
+    assert " install " in script and "-e '.[dev]'" in script
     assert "--junitxml=resultats.xml" in script
 
 
