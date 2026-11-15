@@ -2,7 +2,7 @@
 
 > MàJ : 2026-11-15
 
-**Version courante :** 0.27.1 (`pyproject.toml`, `app/config.py`). Historique des versions : tags git et notes de release.
+**Version courante :** 0.28.0 (`pyproject.toml`, `app/config.py`). Historique des versions : tags git et notes de release.
 
 **Lancer** (Python ≥ 3.12, dans un venv : `python3 -m venv .venv && . .venv/bin/activate`) :
 `scripts/suite-locale.sh` (suite entière, venv jetable ; déclarée dans `.sdlc.yaml`, attestée par `attester --publier`, aucun workflow ne la joue) ; l'app sans MA :
