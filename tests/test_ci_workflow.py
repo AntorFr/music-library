@@ -75,6 +75,23 @@ def test_image_build_needs_the_attestation_job(publish):
     assert any("tests-complets" in run for run in _all_runs({"jobs": {"a": att}}))
 
 
+def test_attestation_cannot_be_bypassed(publish):
+    jobs = publish["jobs"]
+    att, build = jobs["attestation"], jobs["build-and-push"]
+    assert "continue-on-error" not in att
+    for step in att["steps"]:
+        assert "continue-on-error" not in step
+        assert "if" not in step
+        run = step.get("run", "")
+        assert "|| true" not in run and "||true" not in run
+        assert "set +e" not in run
+    # `if` on the build must not neutralise `needs` (always(), failure(), cancelled()).
+    assert "continue-on-error" not in build
+    assert build["if"].strip() == "startsWith(github.ref, 'refs/tags/v')"
+    for step in build["steps"]:
+        assert "continue-on-error" not in step
+
+
 def test_claude_md_states_the_rule():
     text = (ROOT / "CLAUDE.md").read_text()
     assert ".sdlc.yaml" in text
