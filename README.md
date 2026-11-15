@@ -29,7 +29,7 @@ Ports: 8000 (full API and web frontend), 8001 (dedicated ESP API). A published i
 
 ## Configuration
 
-All settings are environment variables prefixed `ML_` (also read from a `.env` file). None is required: every one has a default suited to local development.
+All settings are environment variables prefixed `ML_` (also read from a `.env` file). None is required: every one has a default suited to local development, except `ML_DEFAULT_COVER` (see the note in the Local section: its default answers 500 for a media without cover).
 
 | Variable | Meaning | Default | Required |
 |---|---|---|---|
@@ -70,6 +70,8 @@ pytest
 ```
 
 `ruff check .` is part of the suite (`test_ruff_check_is_silent_on_the_repository`). `attester --publier` posts the `tests-complets` status on the commit; `docker-publish.yml` builds the image on a `v*` tag only once that status is green.
+
+`attester` is a tool of the SDLC chain (not part of this repository): it plays the declared suite on a clean checkout of a commit and posts the status. Without the chain, run `scripts/suite-locale.sh`. Both scripts run `pip install -e` and fail once the git-ignored `data/` exists next to `app/` (see the Local section): move `data/` aside first.
 
 Run it in a git clone with its history: two tests check that the commits cited in `docs/quality/recommendations.md` exist.
 
